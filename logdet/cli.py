@@ -69,6 +69,17 @@ def cmd_demo(args, cfg):
     print('\nnow try:  logdet ask "어제 새벽 3시에 왜 느려졌어?"')
 
 
+def cmd_prune(args, cfg):
+    from .agent import Detective
+    res = Detective(cfg).prune(days=args.days, dry_run=args.dry_run)
+    if res["cutoff"] is None:
+        print("retention is 0 days (keep forever): nothing to prune")
+        return
+    verb = "would delete" if args.dry_run else "deleted"
+    print(f"retention {res['days']:g} days, cutoff {res['cutoff_iso']}: {verb} {res['events']} events, "
+          f"{res['chunks']} chunks, {res['vectors']} vectors")
+
+
 def cmd_serve(args, cfg):
     from .web import serve
     serve(cfg, args.host, args.port)
@@ -138,6 +149,11 @@ def main(argv=None):
     p = sub.add_parser("demo", help="generate sample data for yesterday and ingest it (resets the index)")
     p.add_argument("--out", default="data/sample")
     p.set_defaults(fn=cmd_demo)
+
+    p = sub.add_parser("prune", help="delete data older than the retention period (LOGDET_RETENTION_DAYS)")
+    p.add_argument("--dry-run", action="store_true", help="only count what would be deleted")
+    p.add_argument("--days", type=float, help="override LOGDET_RETENTION_DAYS for this run (0 = keep forever)")
+    p.set_defaults(fn=cmd_prune)
 
     p = sub.add_parser("serve", help="serve the web UI + JSON API")
     p.add_argument("--host", default="0.0.0.0")

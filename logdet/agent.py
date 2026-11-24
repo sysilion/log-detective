@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Iterator
 
 from .analyze import Stats, analyze
-from .config import Config, parse_now
+from .config import Config, parse_now, retention_cutoff
 from .embed import get_embedder
 from .llm import get_llm
 from .parse import parse_lines
@@ -105,8 +105,35 @@ class Detective:
                 log(f"pinecone namespace '{self.cfg.pinecone_namespace}': {self.vs.wait_until(total_ch)} vectors")
             except Exception as e:  # stats are informational only
                 log(f"pinecone stats unavailable: {str(e)[:120]}")
+        pruned = None
+        if self.cfg.retention_days:
+            try:
+                pruned = self.prune()
+                if any(pruned[k] for k in ("events", "chunks", "vectors")):
+                    log(f"retention {self.cfg.retention_days:g}d: pruned {pruned['events']} events, "
+                        f"{pruned['chunks']} chunks, {pruned['vectors']} vectors older than {pruned['cutoff_iso']}")
+            except Exception as e:  # retention must never break ingest
+                log(f"retention prune failed: {str(e)[:160]}")
         return {"events": total_ev, "chunks": total_ch, "vector": self.vs.name, "embed": self.emb.name,
-                "seconds": round(time.time() - t0, 2)}
+                "seconds": round(time.time() - t0, 2), "pruned": pruned}
+
+    # ------------------------------------------------------------ retention
+    def prune(self, days: float | None = None, dry_run: bool = False, now: datetime | None = None) -> dict:
+        """Delete data whose time window ended more than `days` (default LOGDET_RETENTION_DAYS) before now.
+
+        "now" honours LOGDET_NOW, so a demo pinned in the past never prunes its own dataset.
+        """
+        days = self.cfg.retention_days if days is None else days
+        now = now or parse_now(self.cfg.now_override, self.cfg.tz) or datetime.now(self.cfg.tz)
+        cutoff = retention_cutoff(now.timestamp(), days)
+        out = {"days": days, "dry_run": dry_run, "cutoff": cutoff, "events": 0, "chunks": 0, "vectors": 0,
+               "cutoff_iso": datetime.fromtimestamp(cutoff, self.cfg.tz).isoformat() if cutoff else None}
+        if cutoff is None:
+            return out
+        out["events"], out["chunks"] = self.store.prune(cutoff, dry_run)
+        dim = len(self.emb.embed(["dimension probe"])[0])
+        out["vectors"] = self.vs.prune(cutoff, dim, dry_run)
+        return out
 
     # ------------------------------------------------------------ ask
     def prepare(self, question: str, now: datetime | None = None) -> Investigation:

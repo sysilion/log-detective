@@ -38,6 +38,14 @@ class LocalVectorStore:
             self.items[v["id"]] = {"values": v["values"], "metadata": v["metadata"]}
         self._save()
 
+    def prune(self, cutoff: float, dim: int, dry_run: bool = False) -> int:
+        old = [k for k, it in self.items.items() if it["metadata"].get("ts_end", cutoff) < cutoff]
+        if old and not dry_run:
+            for k in old:
+                del self.items[k]
+            self._save()
+        return len(old)
+
     def query(self, vector: list[float], top_k: int, start: float | None = None,
               end: float | None = None) -> list[dict]:
         nq = math.sqrt(sum(x * x for x in vector)) or 1.0
@@ -126,6 +134,36 @@ class PineconeStore:
         except HTTPError as e:
             if e.status != 404:  # namespace not found is fine
                 raise
+
+    def expired_ids(self, cutoff: float, dim: int, limit: int = 10000) -> list[str]:
+        """IDs of vectors whose window ended before `cutoff` (metadata filter on a query; any probe vector)."""
+        probe = [1.0] + [0.0] * (dim - 1)
+        res = request_json("POST", self._host() + "/query", {
+            "vector": probe, "topK": limit, "includeMetadata": False, "includeValues": False,
+            "namespace": self.ns, "filter": {"ts_end": {"$lt": cutoff}}}, self.headers)
+        return [m["id"] for m in res.get("matches", [])]
+
+    def delete_ids(self, ids: list[str], batch: int = 1000) -> None:
+        for i in range(0, len(ids), batch):
+            request_json("POST", self._host() + "/vectors/delete",
+                         {"ids": ids[i:i + batch], "namespace": self.ns}, self.headers)
+
+    def prune(self, cutoff: float, dim: int, dry_run: bool = False, max_rounds: int = 20) -> int:
+        """Delete expired vectors: query IDs by metadata filter, then delete by ID in batches.
+
+        Delete-by-ID works on serverless and pod indexes and through the Sprites gateway, and the ID list
+        gives exact counts for --dry-run. Rounds repeat while new IDs appear (>10k expired vectors).
+        """
+        seen: set[str] = set()
+        for _ in range(max_rounds):
+            new = [i for i in self.expired_ids(cutoff, dim) if i not in seen]
+            if not new:
+                break
+            seen.update(new)
+            if dry_run:
+                break
+            self.delete_ids(new)
+        return len(seen)
 
     def upsert(self, vectors: list[dict]) -> None:
         for i in range(0, len(vectors), 100):

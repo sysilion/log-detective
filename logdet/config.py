@@ -64,6 +64,9 @@ class Config:
     # chunking
     window_seconds: int = field(default_factory=lambda: int(_env("LOGDET_WINDOW", "120")))
 
+    # data retention: events, chunks and vectors whose window ended before now - N days are pruned (0 = forever)
+    retention_days: float = field(default_factory=lambda: float(_env("LOGDET_RETENTION_DAYS", "30")))
+
     # vector store: auto | pinecone | local
     vector: str = field(default_factory=lambda: _env("LOGDET_VECTOR", "auto"))
     pinecone_index: str = field(default_factory=lambda: _env("LOGDET_PINECONE_INDEX", "log-detective"))
@@ -109,6 +112,13 @@ def parse_now(value: str | None, tz: ZoneInfo):
         return None
     dt = datetime.fromisoformat(value)
     return dt if dt.tzinfo else dt.replace(tzinfo=tz)
+
+
+def retention_cutoff(now_ts: float, days: float) -> float | None:
+    """Epoch cutoff for retention: data whose window ended before it is expired. None = keep forever."""
+    if days < 0:
+        raise ValueError("retention days must be >= 0")
+    return None if days == 0 else now_ts - days * 86400
 
 
 def in_sprite() -> bool:

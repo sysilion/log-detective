@@ -17,7 +17,7 @@ KST = ZoneInfo("Asia/Seoul")
 
 class FakeGateway:
     def __init__(self):
-        self.calls, self.vectors = [], {}
+        self.calls, self.vectors, self.deletes = [], {}, []
         self.fail_query = False      # Pinecone /query -> 503
         self.fail_chat = False       # Ollama /api/chat -> 500
         self.cloud_models = None     # e.g. ["glm-5.3-flash"]: /api/chat 404s for other models
@@ -52,11 +52,20 @@ class FakeGateway:
                         fake.vectors[v["id"]] = v
                     return self._reply({"upsertedCount": len(body["vectors"])})
                 if p.endswith("/vectors/delete"):
-                    fake.vectors.clear()
+                    if body.get("ids"):
+                        fake.deletes.append(len(body["ids"]))
+                        for i in body["ids"]:
+                            fake.vectors.pop(i, None)
+                    else:
+                        fake.vectors.clear()
                     return self._reply({})
                 if p.endswith("/query"):
                     if fake.fail_query:
                         return self._reply({"error": "upstream unavailable"}, 503)
+                    if "ts_end" in body.get("filter", {}):  # retention query: ids of expired windows
+                        lt = body["filter"]["ts_end"]["$lt"]
+                        ids = [k for k, v in fake.vectors.items() if v["metadata"]["ts_end"] < lt][:body["topK"]]
+                        return self._reply({"matches": [{"id": i, "score": 0.0} for i in ids]})
                     f = body["filter"]["$and"]
                     lt, gt = f[0]["ts_start"]["$lt"], f[1]["ts_end"]["$gt"]
                     ms = [v for v in fake.vectors.values() if v["metadata"]["ts_start"] < lt
@@ -287,3 +296,23 @@ def test_ollama_ndjson_stream(gw, gw_det):
         gw_det.cfg.llm = "auto"
     assert [t for k, t in events if k == "delta"] == ["LLM ", "streams ", "[E1]"]
     assert events[-1][1]["answer"] == "LLM streams [E1]"
+
+
+def test_pinecone_prune_through_gateway_dry_run_and_batches(gw, gw_det):
+    from logdet.config import retention_cutoff
+    vs = gw_det.vs
+    total = len(gw.vectors)
+    cutoff = datetime(2026, 11, 23, 2, 0, tzinfo=KST).timestamp()
+    expected = sum(1 for v in gw.vectors.values() if v["metadata"]["ts_end"] < cutoff)
+    assert 0 < expected < total
+    assert vs.prune(cutoff, 384, dry_run=True) == expected and len(gw.vectors) == total  # dry run deletes nothing
+    gw.deletes.clear()
+    real = vs.delete_ids
+    vs.delete_ids = lambda ids, batch=1000: real(ids, batch=50)  # force several delete batches
+    try:
+        assert vs.prune(cutoff, 384) == expected
+    finally:
+        vs.delete_ids = real
+    assert len(gw.vectors) == total - expected and all(n <= 50 for n in gw.deletes) and len(gw.deletes) > 1
+    assert all(v["metadata"]["ts_end"] >= cutoff for v in gw.vectors.values())
+    assert retention_cutoff(cutoff, 0) is None

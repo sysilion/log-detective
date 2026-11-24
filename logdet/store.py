@@ -86,6 +86,16 @@ class Store:
         return (self.db.execute("SELECT COUNT(*) FROM events").fetchone()[0],
                 self.db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0])
 
+    def prune(self, cutoff: float, dry_run: bool = False) -> tuple[int, int]:
+        """Delete events older than `cutoff` and chunks whose window ended before it. Returns (events, chunks)."""
+        ev = self.db.execute("SELECT COUNT(*) FROM events WHERE ts < ?", (cutoff,)).fetchone()[0]
+        ch = self.db.execute("SELECT COUNT(*) FROM chunks WHERE ts_end < ?", (cutoff,)).fetchone()[0]
+        if not dry_run and (ev or ch):
+            self.db.execute("DELETE FROM events WHERE ts < ?", (cutoff,))
+            self.db.execute("DELETE FROM chunks WHERE ts_end < ?", (cutoff,))
+            self.db.commit()
+        return ev, ch
+
     def chunks_between(self, start: float, end: float) -> list[Chunk]:
         rows = self.db.execute("SELECT * FROM chunks WHERE ts_start < ? AND ts_end > ? ORDER BY ts_start",
                                (end, start)).fetchall()
