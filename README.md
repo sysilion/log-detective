@@ -105,6 +105,106 @@ Local dev against the real services (optional): keys are read from an auth file 
 | `LOGDET_WINDOW` | `120` | chunk window (seconds) |
 | `LOGDET_RETENTION_DAYS` | `30` | prune data older than N days after each ingest (`0` = keep forever) |
 
+## Continuous ingestion
+
+All four modes share one incremental core. Per-source checkpoints live in `LOGDET_HOME/checkpoints.json`: for files, the inode, byte offset and line counter; for Elasticsearch, the last timestamp. Only new events are stored, embedded and upserted. A time window that is still open is re-upserted under the same chunk id until it closes, and retention pruning keeps running.
+
+| mode | command | when to use |
+|---|---|---|
+| 1. incremental re-runs | `logdet ingest --follow-state /var/log/app/` | cron / Orca automation every N minutes; reads only lines appended since the last run |
+| 2. tail | `logdet tail /var/log/nginx/access.log app.jsonl` | long-running Sprite service; polls and flushes every `LOGDET_FLUSH_SECONDS` (30) |
+| 3. HTTP push | `POST /api/ingest?source=nginx` with `Authorization: Bearer $LOGDET_INGEST_TOKEN` | Fluent Bit, Vector, or `scripts/ship.py` pushing from other hosts |
+| 4. Elasticsearch | `logdet pull-es [--loop --interval 60]` | your logs already live in ES / Elastic Cloud |
+
+Rotation and truncation restart a file from byte 0, and a trailing partial line waits for the next read. In follow modes, line numbers are per-source sequence numbers, so citations stay unique across rotations.
+
+```sh
+# 2. run tail as a Sprite service (survives cold boots; see "Sleep and background loops")
+sprite-env services create tail --cmd /home/sprite/.local/bin/logdet --args "tail,/var/log/app"
+```
+
+### HTTP push (`POST /api/ingest`)
+
+The route is disabled unless `LOGDET_INGEST_TOKEN` is set, and **it stays disabled on the public demo Sprite**. The body can be NDJSON, a JSON array (Fluent Bit `format json`) or plain lines. Lines without a timestamp are stamped with the arrival time.
+
+- **Idempotent.** Events are deduplicated by a hash of source, timestamp and raw line, and an optional `Idempotency-Key` header replays the stored response for 7 days. A retried batch is never double counted, in the stats store or in the vectors.
+- **Atomic.** If the vector upsert fails, nothing from the batch is kept and the response is `503` + `Retry-After`.
+- **Status codes.** `200` ok · `401` bad token · `411` no Content-Length · `413` body over `LOGDET_INGEST_MAX_BYTES` (1 MB) · `429` + `Retry-After` over `LOGDET_INGEST_PER_MINUTE` (120) · `503` + `Retry-After` when busy or a backend is down. **Senders should retry 5xx/429 and never other 4xx.**
+
+A deeply cold Sprite can take a while to answer the first request after a long idle, so give senders a timeout of at least 30 s and a disk buffer:
+
+```ini
+# Fluent Bit (classic config)
+[SERVICE]
+    storage.path              /var/lib/fluent-bit/buffer
+    storage.backlog.mem_limit 16M
+[INPUT]
+    Name          tail
+    Path          /var/log/nginx/access.log
+    storage.type  filesystem          # buffer on disk while the Sprite wakes
+[OUTPUT]
+    Name                 http
+    Match                *
+    Host                 log-detective-xxxx.sprites.app
+    Port                 443
+    tls                  On
+    URI                  /api/ingest?source=nginx
+    Format               json_lines
+    json_date_key        date
+    json_date_format     epoch
+    Header               Authorization Bearer ${LOGDET_INGEST_TOKEN}
+    Retry_Limit          no_limits    # retries 5xx/429 with backoff
+    net.connect_timeout  30
+    storage.total_limit_size 1G
+```
+
+```toml
+# Vector
+[sources.nginx]
+type = "file"
+include = ["/var/log/nginx/access.log"]
+
+[sinks.logdet]
+type = "http"
+inputs = ["nginx"]
+uri = "https://log-detective-xxxx.sprites.app/api/ingest?source=nginx"
+method = "post"
+encoding.codec = "json"
+framing.method = "newline_delimited"
+auth.strategy = "bearer"
+auth.token = "${LOGDET_INGEST_TOKEN}"
+batch.max_bytes = 900000               # stay under LOGDET_INGEST_MAX_BYTES
+batch.timeout_secs = 10
+request.timeout_secs = 60              # >= 30 s for cold wakes
+request.retry_initial_backoff_secs = 2
+request.retry_max_duration_secs = 120  # Vector retries 5xx/429, not other 4xx
+buffer.type = "disk"
+buffer.max_size = 268435488
+buffer.when_full = "block"
+```
+
+There is also a minimal, dependency-free shipper. It uses exponential backoff, honours `Retry-After`, and sends an `Idempotency-Key` per batch:
+
+```sh
+LOGDET_INGEST_TOKEN=... python3 scripts/ship.py https://<sprite>.sprites.app nginx < access.log
+tail -F app.log | LOGDET_INGEST_TOKEN=... python3 scripts/ship.py https://<sprite>.sprites.app app --batch 200
+```
+
+### Elasticsearch (`logdet pull-es`)
+
+It pages with a point-in-time + `search_after` scan sorted by the timestamp field. Clusters without PIT fall back to timestamp-range pages. The checkpoint is the last timestamp, and documents fetched again at the boundary are dropped by the idempotent event hash, which includes the ES `_id`.
+
+```sh
+export LOGDET_ES_URL=https://my-deployment.es.us-east-1.aws.elastic.cloud
+export LOGDET_ES_INDEX='logs-*' LOGDET_ES_TS_FIELD=@timestamp
+export LOGDET_ES_API_KEY=...            # or LOGDET_ES_USER / LOGDET_ES_PASSWORD, or "elasticsearch" in the auth file
+export LOGDET_ES_QUERY='service.name:checkout'                # Lucene string or query-DSL JSON
+export LOGDET_ES_FIELDS='{"latency": "event.duration"}' LOGDET_ES_LATENCY_UNIT=ns   # ECS durations are ns
+logdet pull-es            # one pass (cron-friendly), or --loop --interval 60
+```
+
+Default field names: `message|log|msg`, `log.level|level|severity`, `http.response.status_code|status`, `latency_ms|duration_ms|event.duration`, `service.name|service`, `url.path|path`.
+
 ## Data retention
 
 Old data is pruned so the vector index and the local store don't grow forever:
