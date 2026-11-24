@@ -102,5 +102,14 @@ class Config:
         self.home.mkdir(parents=True, exist_ok=True)
 
 
+def parse_now(value: str | None, tz: ZoneInfo):
+    """Parse an ISO 8601 'current time' override; naive values are taken in `tz`. Empty -> None."""
+    from datetime import datetime
+    if not value:
+        return None
+    dt = datetime.fromisoformat(value)
+    return dt if dt.tzinfo else dt.replace(tzinfo=tz)
+
+
 def in_sprite() -> bool:
     return os.path.isdir("/.sprite") or bool(_env("SPRITE_NAME"))

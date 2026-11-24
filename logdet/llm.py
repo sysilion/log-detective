@@ -48,6 +48,10 @@ class OllamaChat:
         res = request_json("GET", self.base + "/api/tags", headers=self.headers, timeout=15)
         return [m.get("name") or m.get("model") for m in (res or {}).get("models", [])]
 
+    def stream(self, system: str, user: str):
+        """Yield the answer in chunks. Default: one chunk from chat()."""
+        yield self.chat(system, user)
+
     def chat(self, system: str, user: str) -> str:
         try:
             return self._chat(system, user)
@@ -83,6 +87,10 @@ class GeminiChat:
         res = request_json("GET", self.base + "/v1beta/models?pageSize=200", headers=self.headers, timeout=15)
         return [m["name"].removeprefix("models/") for m in (res or {}).get("models", [])
                 if "generateContent" in m.get("supportedGenerationMethods", ["generateContent"])]
+
+    def stream(self, system: str, user: str):
+        """Yield the answer in chunks. Default: one chunk from chat()."""
+        yield self.chat(system, user)
 
     def chat(self, system: str, user: str) -> str:
         try:

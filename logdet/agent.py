@@ -3,20 +3,36 @@ from __future__ import annotations
 
 import re
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Iterator
 
 from .analyze import Stats, analyze
-from .config import Config
+from .config import Config, parse_now
 from .embed import get_embedder
 from .llm import get_llm
 from .parse import parse_lines
 from .store import Store, build_chunks
-from .timeparse import parse_time_range
+from .timeparse import TimeRange, parse_time_range
 from .vector import get_vector_store
 
 LOG_SUFFIXES = {".log", ".jsonl", ".json", ".txt", ".ndjson", ""}
 _CITE_LINE_RE = re.compile(r"^\[([^\]:]+):(\d+)\] (.*)$")
+_INTERESTING_RE = re.compile(r"ERROR|FATAL|WARN|timeout|timed out|exhaust|refused|duration: \d{4,}|\" 5\d\d ", re.I)
+RULE_BASED = "rule-based (no LLM)"
+
+
+@dataclass
+class Investigation:
+    """Everything computed locally for one question, before the LLM is involved."""
+    question: str
+    tr: TimeRange
+    stats: Stats
+    evidence: list[dict]
+    hits: list[dict]
+    retrieval_error: str | None
+    t0: float
 
 
 def _iter_files(paths: list[str]):
@@ -87,50 +103,78 @@ class Detective:
                 "seconds": round(time.time() - t0, 2)}
 
     # ------------------------------------------------------------ ask
-    def ask(self, question: str, now: datetime | None = None, use_llm: bool = True) -> dict:
+    def prepare(self, question: str, now: datetime | None = None) -> Investigation:
+        """Phase 1 (local, fast): time range, baseline stats, retrieval and evidence. Touches SQLite."""
         t0 = time.time()
-        if now is None and self.cfg.now_override:
-            now = datetime.fromisoformat(self.cfg.now_override)
-            now = now if now.tzinfo else now.replace(tzinfo=self.cfg.tz)
-        now = now or datetime.now(self.cfg.tz)
+        now = now or parse_now(self.cfg.now_override, self.cfg.tz) or datetime.now(self.cfg.tz)
         tr = parse_time_range(question, now, self.cfg.tz, self.store.time_range())
         stats = analyze(self.store, tr.start_ts, tr.end_ts)
 
         query = question + "\n" + "\n".join(s["sig"] for s in stats.signatures[:5])
-        qv = self.emb.embed([query], "query")[0]
+        lo, hi = tr.start_ts - 1800, tr.end_ts
         retrieval_error = None
         try:
-            hits = self.vs.query(qv, top_k=8, start=tr.start_ts - 1800, end=tr.end_ts)
-        except Exception as e:  # vector store unreachable: rank this window's chunks locally
-            retrieval_error = f"{self.vs.name}: {str(e)[:200]}"
-            hits = local_rerank(self.store.chunks_between(tr.start_ts - 1800, tr.end_ts), query, top_k=8)
-        evidence = self._evidence(stats, hits)
+            qv = self.emb.embed([query], "query")[0]
+            hits = self.vs.query(qv, top_k=8, start=lo, end=hi)
+        except Exception as e:  # embedder or vector store unreachable: rank this window's chunks locally
+            retrieval_error = f"{self.vs.name}/{self.emb.name}: {str(e)[:200]}"
+            hits = local_rerank(self.store.chunks_between(lo, hi), query, top_k=8)
+        return Investigation(question, tr, stats, self._evidence(stats, hits), hits, retrieval_error, t0)
 
-        answer, llm_name, llm_error = "", None, None
+    def _llm(self, use_llm: bool):
         try:
-            llm = get_llm(self.cfg) if use_llm else None
+            return (get_llm(self.cfg) if use_llm else None), None
         except Exception as e:  # misconfigured backend: still answer with the rule-based report
-            llm, llm_error = None, str(e)[:300]
+            return None, str(e)[:300]
+
+    def answer(self, inv: Investigation, use_llm: bool = True) -> dict:
+        """Phase 2 (network, slow): ask the LLM; fall back to the rule-based report. No SQLite access."""
+        llm, err = self._llm(use_llm)
         if llm is not None:
             try:
-                answer = llm.chat(SYSTEM_PROMPT, self._prompt(question, tr, stats, evidence))
-                llm_name = llm.name
+                text = llm.chat(SYSTEM_PROMPT, self._prompt(inv))
+                if text:
+                    return self.result(inv, text, llm.name, None)
             except Exception as e:  # keep the demo alive if the model is unreachable
-                llm_error = str(e)[:300]
-        if not answer:
-            answer = heuristic_report(question, stats, evidence, self.cfg.tz)
-            llm_name = "rule-based (no LLM)"
+                err = str(e)[:300]
+        return self.result(inv, heuristic_report(inv.question, inv.stats, inv.evidence, self.cfg.tz),
+                           RULE_BASED, err)
+
+    def answer_stream(self, inv: Investigation, use_llm: bool = True) -> Iterator[tuple[str, object]]:
+        """Like answer(), but yields ("delta", text) chunks as the LLM streams, then ("done", result)."""
+        llm, err = self._llm(use_llm)
+        parts: list[str] = []
+        if llm is not None:
+            try:
+                for chunk in llm.stream(SYSTEM_PROMPT, self._prompt(inv)):
+                    parts.append(chunk)
+                    yield "delta", chunk
+            except Exception as e:
+                err = str(e)[:300]
+            if parts:  # a partial answer is still better than switching to a different text mid-way
+                yield "done", self.result(inv, "".join(parts).strip(), llm.name, err)
+                return
+        text = heuristic_report(inv.question, inv.stats, inv.evidence, self.cfg.tz)
+        yield "delta", text
+        yield "done", self.result(inv, text, RULE_BASED, err)
+
+    def result(self, inv: Investigation, answer: str, llm_name: str, llm_error: str | None) -> dict:
+        tr = inv.tr
         return {
-            "question": question,
+            "question": inv.question,
             "range": {"start": tr.start.isoformat(), "end": tr.end.isoformat(), "label": tr.label,
                       "explicit": tr.explicit},
-            "answer": answer, "llm": llm_name, "llm_error": llm_error, "retrieval_error": retrieval_error,
+            "answer": answer, "llm": llm_name, "llm_error": llm_error, "retrieval_error": inv.retrieval_error,
             "vector": self.vs.name, "embed": self.emb.name,
-            "stats": stats.to_dict(), "evidence": evidence,
+            "stats": inv.stats.to_dict(), "evidence": inv.evidence,
             "retrieved": [{"id": h["id"], "score": round(h["score"], 3), "source": h["metadata"].get("source"),
-                           "ts_start": h["metadata"].get("ts_start")} for h in hits],
-            "elapsed_ms": int((time.time() - t0) * 1000),
+                           "ts_start": h["metadata"].get("ts_start")} for h in inv.hits],
+            "elapsed_ms": int((time.time() - inv.t0) * 1000),
         }
+
+    def ask(self, question: str, now: datetime | None = None, use_llm: bool = True) -> dict:
+        """One-shot investigation: prepare() + answer()."""
+        return self.answer(self.prepare(question, now), use_llm)
 
     def _evidence(self, stats: Stats, hits: list[dict], limit: int = 14) -> list[dict]:
         seen, ev = set(), []
@@ -166,15 +210,19 @@ class Detective:
                 m = _CITE_LINE_RE.match(line)
                 if not m or picked >= 3:
                     continue
-                if re.search(r"ERROR|FATAL|WARN|timeout|timed out|exhaust|refused|duration: \d{4,}|\" 5\d\d ", m.group(3), re.I):
-                    add(m.group(1), m.group(2), md.get("ts_start"), m.group(3), f"retrieved chunk (score {h['score']:.2f})")
+                if _INTERESTING_RE.search(m.group(3)):
+                    r = db.execute("SELECT ts, raw FROM events WHERE source=? AND lineno=?",
+                                   (m.group(1), int(m.group(2)))).fetchone()
+                    add(m.group(1), m.group(2), r["ts"] if r else md.get("ts_start"),
+                        r["raw"].splitlines()[0] if r else m.group(3), f"retrieved chunk (score {h['score']:.2f})")
                     picked += 1
         ev.sort(key=lambda e: e["ts"] or 0)
         for i, e in enumerate(ev, 1):
             e["cite"] = f"E{i}"
         return ev
 
-    def _prompt(self, question: str, tr, stats: Stats, evidence: list[dict]) -> str:
+    def _prompt(self, inv: Investigation) -> str:
+        question, tr, stats, evidence = inv.question, inv.tr, inv.stats, inv.evidence
         tz = self.cfg.tz
         fmt = lambda ts: datetime.fromtimestamp(ts, tz).strftime("%H:%M:%S") if ts else "?"  # noqa: E731
         w, b = stats.window, stats.baseline

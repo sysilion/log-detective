@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS events (
   latency_ms REAL, path TEXT, service TEXT, msg TEXT, sig TEXT, is_error INTEGER, raw TEXT
 );
 CREATE INDEX IF NOT EXISTS events_ts ON events(ts);
+CREATE INDEX IF NOT EXISTS events_src ON events(source, lineno);
 CREATE TABLE IF NOT EXISTS chunks (
   id TEXT PRIMARY KEY, source TEXT, ts_start REAL, ts_end REAL, n_lines INTEGER,
   n_errors INTEGER, text TEXT

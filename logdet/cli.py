@@ -7,14 +7,11 @@ import os
 import sys
 from datetime import datetime, timedelta
 
-from .config import Config, in_sprite
+from .config import Config, in_sprite, parse_now
 
 
 def _now(cfg: Config, s: str | None) -> datetime | None:
-    if not s:
-        return None
-    dt = datetime.fromisoformat(s)
-    return dt if dt.tzinfo else dt.replace(tzinfo=cfg.tz)
+    return parse_now(s, cfg.tz)
 
 
 def cmd_ingest(args, cfg):

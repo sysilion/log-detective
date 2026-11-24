@@ -206,3 +206,39 @@ def test_auth_file_format(tmp_path, monkeypatch):
     assert (c.pinecone_api_key, c.gemini_api_key, c.ollama_api_key) == ("pc-1", "g-1", "o-1")
     monkeypatch.setenv("GEMINI_API_KEY", "env-wins")
     assert C().gemini_api_key == "env-wins"
+
+
+def test_query_embedding_failure_falls_back(gw, gw_det):
+    real = gw_det.emb.embed
+
+    def flaky(texts, kind="passage"):
+        if kind == "query":
+            raise RuntimeError("embedder down")
+        return real(texts, kind)
+    gw_det.emb.embed = flaky
+    try:
+        res = gw_det.ask(Q, now=NOW)
+    finally:
+        gw_det.emb.embed = real
+    assert "embedder down" in res["retrieval_error"] and res["retrieved"]
+    assert any("nightly_sales_report" in e["line"] for e in res["evidence"])
+
+
+def test_evidence_lines_carry_their_own_timestamps(gw, gw_det):
+    from datetime import datetime as dt
+    res = gw_det.ask(Q, now=NOW)
+    for e in res["evidence"]:
+        # every evidence line's ts must match the timestamp printed inside the line itself
+        hhmm = dt.fromtimestamp(e["ts"], KST).strftime("%H:%M")
+        assert hhmm in e["line"] or dt.fromtimestamp(e["ts"], KST).strftime("%d/%b/%Y:%H:%M") in e["line"]
+    assert [e["ts"] for e in res["evidence"]] == sorted(e["ts"] for e in res["evidence"])
+
+
+def test_answer_stream_falls_back_to_rule_based(gw, gw_det):
+    gw.fail_chat = True
+    gw_det.cfg.llm = "ollama"
+    inv = gw_det.prepare(Q, now=NOW)
+    events = list(gw_det.answer_stream(inv))
+    gw_det.cfg.llm = "auto"
+    assert events[-1][0] == "done" and events[-1][1]["llm"].startswith("rule-based")
+    assert "".join(t for k, t in events if k == "delta") == events[-1][1]["answer"]

@@ -74,11 +74,13 @@ def analyze(store: Store, start: float, end: float) -> Stats:
     span = max(end - start, 1800.0)
     base_rows = store.events(start - span, start)
     b_start = start - span
+    base_len = span
     if len(base_rows) < 20:  # not enough history right before: use everything outside the window
         rng = store.time_range()
         if rng:
             base_rows = store.events(rng[0], start) + store.events(end, rng[1] + 1)
-            b_start = rng[0]
+            b_start = min(rng[0], start)
+            base_len = max(start - rng[0], 0) + max(rng[1] + 1 - end, 0)
     st = Stats(_window(rows, start, end), _window(base_rows, b_start, start))
     b = st.baseline
 
@@ -107,7 +109,7 @@ def analyze(store: Store, start: float, end: float) -> Stats:
                       "peak_error_rate": max(m["err"] / m["n"] for m in bad if m["n"])}
 
     # error signatures: window vs baseline, rate-normalized
-    win_len, base_len = max(end - start, 1), max(start - b_start, 1)
+    win_len, base_len = max(end - start, 1), max(base_len, 1)
     base_sig: dict[str, int] = {}
     for r in base_rows:
         if _is_problem(r):
