@@ -48,7 +48,7 @@ Built for **Fly.io Hacksgiving 2026**. It uses two Sprites connectors: **Pinecon
 ## Quick start (local, offline)
 
 ```sh
-git clone https://github.com/sysilion-ib/log-detective && cd log-detective
+git clone https://github.com/sysilion/log-detective && cd log-detective
 pip install -e .            # or: alias logdet="python3 -m logdet.cli"
 export LOGDET_TZ=Asia/Seoul # timezone used for "yesterday 3am"
 logdet demo                 # generate the sample incident for *yesterday* and ingest it
