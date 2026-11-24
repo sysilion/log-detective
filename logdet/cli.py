@@ -85,6 +85,27 @@ def cmd_tail(args, cfg):
     tail(Detective(cfg), args.paths, cfg.flush_seconds, log=lambda m: print(m, flush=True))
 
 
+def cmd_pull_es(args, cfg):
+    import time as _t
+    from .agent import Detective
+    from .es import pull_once
+    det = Detective(cfg)
+    while True:
+        try:
+            r = pull_once(det, log=lambda m: print(m, flush=True))
+            print(f"[pull-es] {r['mode']}: fetched {r['fetched']}, new {r['accepted']}, "
+                  f"duplicates {r['duplicates']}, pages {r['pages']}", flush=True)
+        except Exception as e:
+            print(f"[pull-es] error: {str(e)[:200]}", flush=True)
+            if not args.loop:
+                raise SystemExit(1)
+        if cfg.retention_days:
+            det.prune()
+        if not args.loop:
+            return
+        _t.sleep(args.interval)
+
+
 def cmd_prune(args, cfg):
     from .agent import Detective
     res = Detective(cfg).prune(days=args.days, dry_run=args.dry_run)
@@ -171,6 +192,11 @@ def main(argv=None):
     p = sub.add_parser("demo", help="generate sample data for yesterday and ingest it (resets the index)")
     p.add_argument("--out", default="data/sample")
     p.set_defaults(fn=cmd_demo)
+
+    p = sub.add_parser("pull-es", help="pull new documents from Elasticsearch since the last checkpoint")
+    p.add_argument("--loop", action="store_true", help="keep pulling every --interval seconds (Sprite service)")
+    p.add_argument("--interval", type=float, default=60)
+    p.set_defaults(fn=cmd_pull_es)
 
     p = sub.add_parser("prune", help="delete data older than the retention period (LOGDET_RETENTION_DAYS)")
     p.add_argument("--dry-run", action="store_true", help="only count what would be deleted")
