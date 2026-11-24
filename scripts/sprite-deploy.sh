@@ -16,7 +16,12 @@ git archive --format=tar HEAD | sprite exec -s "$SPRITE" --stdin -- \
   sh -c 'rm -rf "$HOME/log-detective" && mkdir -p "$HOME/log-detective" && tar -x -C "$HOME/log-detective"'
 
 echo "==> setting up inside the sprite"
-sprite exec -s "$SPRITE" --env "LOGDET_TZ=${LOGDET_TZ:-Asia/Seoul},LOGDET_MODEL=${LOGDET_MODEL:-}" -- \
+PASS="LOGDET_TZ=${LOGDET_TZ:-Asia/Seoul},LOGDET_MODEL=${LOGDET_MODEL:-}"
+for v in LOGDET_PINECONE_NAMESPACE LOGDET_SKIP_DEMO LOGDET_INGEST_TOKEN LOGDET_TRIGGER_TOKEN LOGDET_PUBLIC_URL; do
+  eval "val=\${$v:-}"
+  if [ -n "$val" ]; then PASS="$PASS,$v=$val"; fi
+done
+sprite exec -s "$SPRITE" --env "$PASS" -- \
   sh -c 'cd "$HOME/log-detective" && sh scripts/sprite-setup.sh'
 
 echo "==> sprite URL"
