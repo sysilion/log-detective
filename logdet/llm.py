@@ -7,7 +7,9 @@
 from __future__ import annotations
 
 from .config import Config
-from .net import HTTPError, gemini_gateway, ollama_gateway, request_json
+import json
+
+from .net import HTTPError, gemini_gateway, ollama_gateway, request_json, stream_lines
 
 GEMINI_API = "https://generativelanguage.googleapis.com"
 # Stable free-tier Flash-Lite model; minimal thinking by default -> low latency. Override with LOGDET_GEMINI_MODEL.
@@ -49,8 +51,16 @@ class OllamaChat:
         return [m.get("name") or m.get("model") for m in (res or {}).get("models", [])]
 
     def stream(self, system: str, user: str):
-        """Yield the answer in chunks. Default: one chunk from chat()."""
-        yield self.chat(system, user)
+        """Native Ollama streaming: NDJSON lines with message.content deltas."""
+        body = {"model": self.model, "stream": True, "options": {"temperature": 0.2},
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+        for line in stream_lines("POST", self.base + "/api/chat", body, self.headers, timeout=300):
+            obj = json.loads(line)
+            if obj.get("error"):
+                raise RuntimeError(str(obj["error"])[:200])
+            text = (obj.get("message") or {}).get("content", "")
+            if text:
+                yield text
 
     def chat(self, system: str, user: str) -> str:
         try:
@@ -88,38 +98,64 @@ class GeminiChat:
         return [m["name"].removeprefix("models/") for m in (res or {}).get("models", [])
                 if "generateContent" in m.get("supportedGenerationMethods", ["generateContent"])]
 
-    def stream(self, system: str, user: str):
-        """Yield the answer in chunks. Default: one chunk from chat()."""
-        yield self.chat(system, user)
+    def _body(self, system: str, user: str) -> dict:
+        return {"systemInstruction": {"parts": [{"text": system}]},
+                "contents": [{"role": "user", "parts": [{"text": user}]}],
+                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096}}
+
+    def _recover(self, e: HTTPError) -> bool:
+        """Decide whether to retry after an HTTP error, switching model if needed."""
+        if e.status in (429, 500, 503):  # overloaded / rate limited: retry once, on the default model
+            import time
+            time.sleep(1.5)
+            self.model = DEFAULT_GEMINI_MODEL
+            return True
+        if _model_missing(e):
+            pick = pick_model(self.models(), GEMINI_PREFERRED)
+            if pick and pick != self.model:
+                self.model = pick
+                return True
+        return False
 
     def chat(self, system: str, user: str) -> str:
         try:
             return self._chat(system, user)
         except HTTPError as e:
-            if e.status in (429, 500, 503):  # overloaded / rate limited: retry once, on the default model
-                import time
-                time.sleep(1.5)
-                self.model = DEFAULT_GEMINI_MODEL
-                return self._chat(system, user)
-            if not _model_missing(e):
+            if not self._recover(e):
                 raise
-            pick = pick_model(self.models(), GEMINI_PREFERRED)
-            if not pick or pick == self.model:
-                raise
-            self.model = pick
             return self._chat(system, user)
 
+    def stream(self, system: str, user: str):
+        """streamGenerateContent with SSE (`alt=sse`); one retry if the first connect fails."""
+        try:
+            yield from self._stream(system, user)
+        except HTTPError as e:  # raised on connect, before any text was yielded
+            if not self._recover(e):
+                raise
+            yield from self._stream(system, user)
+
+    def _stream(self, system: str, user: str):
+        url = f"{self.base}/v1beta/models/{self.model}:streamGenerateContent?alt=sse"
+        for line in stream_lines("POST", url, self._body(system, user), self.headers, timeout=120):
+            if not line.startswith("data:"):
+                continue
+            text = gemini_text(json.loads(line[5:].strip()))
+            if text:
+                yield text
+
     def _chat(self, system: str, user: str) -> str:
-        res = request_json("POST", f"{self.base}/v1beta/models/{self.model}:generateContent", {
-            "systemInstruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"text": user}]}],
-            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 4096},
-        }, self.headers, timeout=120)
-        cands = (res or {}).get("candidates") or []
-        if not cands:
-            raise RuntimeError(f"Gemini returned no candidates: {str(res.get('promptFeedback', res))[:200]}")
-        parts = (cands[0].get("content") or {}).get("parts") or []
-        return "".join(p.get("text", "") for p in parts if not p.get("thought")).strip()
+        res = request_json("POST", f"{self.base}/v1beta/models/{self.model}:generateContent",
+                           self._body(system, user), self.headers, timeout=120)
+        if not (res or {}).get("candidates"):
+            raise RuntimeError(f"Gemini returned no candidates: {str((res or {}).get('promptFeedback', res))[:200]}")
+        return gemini_text(res).strip()
+
+
+def gemini_text(res: dict) -> str:
+    """Concatenate the non-thought text parts of the first candidate."""
+    cands = (res or {}).get("candidates") or []
+    parts = ((cands[0].get("content") or {}).get("parts") or []) if cands else []
+    return "".join(p.get("text", "") for p in parts if not p.get("thought"))
 
 
 def _local_ollama_up(cfg: Config) -> bool:

@@ -64,6 +64,17 @@ class FakeGateway:
                     ms.sort(key=lambda v: -sum(a * b for a, b in zip(v["values"], body["vector"])))
                     return self._reply({"matches": [{"id": v["id"], "score": 0.5, "metadata": v["metadata"]}
                                                     for v in ms[:body["topK"]]]})
+                if ":streamGenerateContent" in p:
+                    chunks = ["Gemini ", "streams: pool ", "exhausted [E1]"]
+                    lines = [{"candidates": [{"content": {"parts": [{"text": "hmm", "thought": True}]}}]}] + \
+                        [{"candidates": [{"content": {"parts": [{"text": c}]}}]} for c in chunks]
+                    payload = "".join(f"data: {json.dumps(x)}\r\n\r\n" for x in lines).encode()
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Content-Length", str(len(payload)))
+                    self.end_headers()
+                    self.wfile.write(payload)
+                    return
                 if ":generateContent" in p:
                     return self._reply({"candidates": [{"content": {"parts": [
                         {"text": "thinking...", "thought": True}, {"text": "Gemini says: pool exhausted [E1]"}]}}]})
@@ -72,6 +83,16 @@ class FakeGateway:
                         return self._reply({"error": "internal"}, 500)
                     if fake.cloud_models is not None and body["model"] not in fake.cloud_models:
                         return self._reply({"error": f"model '{body['model']}' not found"}, 404)
+                    if body.get("stream"):
+                        payload = "".join(json.dumps({"message": {"content": c}, "done": False}) + "\n"
+                                          for c in ["LLM ", "streams ", "[E1]"]).encode()
+                        payload += json.dumps({"message": {"content": ""}, "done": True}).encode() + b"\n"
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/x-ndjson")
+                        self.send_header("Content-Length", str(len(payload)))
+                        self.end_headers()
+                        self.wfile.write(payload)
+                        return
                     return self._reply({"message": {"role": "assistant", "content": "LLM says: pool exhausted [E1]"}})
                 self._reply({"error": "unknown"}, 404)
 
@@ -242,3 +263,27 @@ def test_answer_stream_falls_back_to_rule_based(gw, gw_det):
     gw_det.cfg.llm = "auto"
     assert events[-1][0] == "done" and events[-1][1]["llm"].startswith("rule-based")
     assert "".join(t for k, t in events if k == "delta") == events[-1][1]["answer"]
+
+
+def test_gemini_sse_stream_through_gateway(gw, gw_det):
+    gw_det.cfg.gemini_gateway = gw.base + "/gemini/conn_g"
+    try:
+        events = list(gw_det.answer_stream(gw_det.prepare(Q, now=NOW)))
+    finally:
+        gw_det.cfg.gemini_gateway = ""
+    deltas = [t for k, t in events if k == "delta"]
+    assert deltas == ["Gemini ", "streams: pool ", "exhausted [E1]"]  # thought parts dropped
+    done = events[-1][1]
+    assert done["answer"] == "Gemini streams: pool exhausted [E1]" and done["llm"].startswith("gemini(")
+    call = next(c for c in reversed(gw.calls) if ":streamGenerateContent" in c[1])
+    assert call[1].endswith("/v1beta/models/gemini-3.5-flash-lite:streamGenerateContent?alt=sse")
+
+
+def test_ollama_ndjson_stream(gw, gw_det):
+    gw_det.cfg.llm = "ollama"
+    try:
+        events = list(gw_det.answer_stream(gw_det.prepare(Q, now=NOW)))
+    finally:
+        gw_det.cfg.llm = "auto"
+    assert [t for k, t in events if k == "delta"] == ["LLM ", "streams ", "[E1]"]
+    assert events[-1][1]["answer"] == "LLM streams [E1]"

@@ -36,6 +36,27 @@ def request_json(method: str, url: str, payload: Any = None, headers: dict | Non
         return raw
 
 
+def stream_lines(method: str, url: str, payload: Any = None, headers: dict | None = None,
+                 timeout: float = 120.0):
+    """POST/GET and yield the response body line by line (for SSE / NDJSON streaming APIs)."""
+    hdrs = {"Accept": "*/*", "User-Agent": "log-detective/0.1"}
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode()
+        hdrs["Content-Type"] = "application/json"
+    hdrs.update(headers or {})
+    req = urllib.request.Request(url, data=data, method=method, headers=hdrs)
+    try:
+        resp = urllib.request.urlopen(req, timeout=timeout)
+    except urllib.error.HTTPError as e:
+        raise HTTPError(e.code, url, e.read().decode(errors="replace")) from None
+    with resp:
+        for raw in resp:
+            line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
+            if line:
+                yield line
+
+
 def _walk(obj: Any):
     if isinstance(obj, dict):
         yield obj
