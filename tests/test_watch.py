@@ -139,3 +139,18 @@ def test_keep_awake_holds_and_releases_task(tmp_path):
     assert calls[0] == ("PUT", "/v1/tasks/logdet-watch", {"expire": "5m"})
     assert calls[-1][:2] == ("DELETE", "/v1/tasks/logdet-watch")
     assert not KeepAwake("x", enabled=True, sock=str(tmp_path / "missing.sock")).active
+
+
+def test_sigterm_releases_keep_awake_context():
+    """Services stop with SIGTERM; the CLI turns it into SystemExit so `with KeepAwake(...)` exits cleanly."""
+    import signal
+    import subprocess
+    import sys
+    code = ("import signal,sys,time\n"
+            "signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))\n"
+            "try:\n    print('ready', flush=True); time.sleep(30)\nfinally:\n    print('released', flush=True)\n")
+    p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True)
+    assert p.stdout.readline().strip() == "ready"
+    p.send_signal(signal.SIGTERM)
+    out, _ = p.communicate(timeout=10)
+    assert "released" in out and p.returncode == 0

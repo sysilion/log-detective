@@ -89,13 +89,16 @@ def cmd_tail(args, cfg):
 
 
 def cmd_pull_es(args, cfg):
-    import time as _t
     from .agent import Detective
     from .es import pull_once
     from .keepawake import KeepAwake
     det = Detective(cfg)
-    hold = KeepAwake("pull-es", enabled=None if args.loop else False, log=lambda m: print(m, flush=True))
-    hold.__enter__()
+    with KeepAwake("pull-es", enabled=None if args.loop else False, log=lambda m: print(m, flush=True)):
+        _pull_loop(args, cfg, det, pull_once)
+
+
+def _pull_loop(args, cfg, det, pull_once):
+    import time as _t
     while True:
         try:
             r = pull_once(det, log=lambda m: print(m, flush=True))
@@ -285,6 +288,10 @@ def main(argv=None):
     p.set_defaults(fn=cmd_doctor)
 
     args = ap.parse_args(argv)
+    if args.cmd in ("tail", "watch", "pull-es", "serve"):
+        # services are stopped with SIGTERM: exit normally so keep-awake tasks are released
+        import signal
+        signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     try:
         args.fn(args, Config())
     except KeyboardInterrupt:
