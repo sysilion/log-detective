@@ -88,22 +88,46 @@ Local dev against the real services (optional): keys are read from an auth file 
 
 ## Configuration
 
-| env | default | meaning |
+Every setting is an environment variable with a safe default. Secrets can also come from the auth file (`LOGDET_AUTH_FILE`, default `~/proj/auth.json`, format `{"<provider>": {"type": "api", "key": "..."}}`; providers `pinecone`, `google`, `ollama`, `slack`, `discord`, `webhook`, and `elasticsearch` with `key` or `user`/`password`).
+
+| variable | default | meaning |
 |---|---|---|
-| `LOGDET_TZ` | system tz | timezone for parsing questions / naive timestamps |
-| `LOGDET_HOME` | `.logdet` | local SQLite + local vector file |
-| `LOGDET_VECTOR` | `auto` | `pinecone` (connector or `PINECONE_API_KEY`) / `local` |
-| `LOGDET_PINECONE_INDEX` / `_NAMESPACE` | `log-detective` / `logs` | Pinecone index and namespace |
-| `LOGDET_PINECONE_GATEWAY` | auto-discovered | override, e.g. `https://api.sprites.dev/v1/gateway/pinecone/conn_xxx` |
-| `LOGDET_EMBED` | `hash` | `hash` (384-d, local) / `pinecone` (Inference, 1024-d) / `ollama` |
+| **core** | | |
+| `LOGDET_HOME` | `.logdet` | local SQLite store, checkpoints, findings, local vector file |
+| `LOGDET_TZ` | system tz | timezone for questions and naive timestamps |
+| `LOGDET_NOW` | – | pin "now" (ISO 8601) for demos; also used by retention and watch |
+| `LOGDET_WINDOW` | `120` | chunk window in seconds |
+| `LOGDET_AUTH_FILE` | `~/proj/auth.json` | local key file (direct-API mode) |
+| `LOGDET_DISCOVER` | `auto` | `0` disables Sprites gateway discovery |
+| **vector store / embeddings** | | |
+| `LOGDET_VECTOR` | `auto` | `pinecone` (connector or key) / `local` |
+| `LOGDET_PINECONE_INDEX` / `LOGDET_PINECONE_NAMESPACE` | `log-detective` / `logs` | index and namespace |
+| `LOGDET_PINECONE_GATEWAY` | discovered | override the Pinecone gateway base URL |
+| `PINECONE_API_KEY` | – | direct Pinecone key (local dev) |
+| `LOGDET_EMBED` / `LOGDET_EMBED_DIM` | `hash` / `384` | `hash`, `pinecone` (Inference, 1024-d) or `ollama` |
+| `LOGDET_PINECONE_EMBED_MODEL` / `LOGDET_OLLAMA_EMBED_MODEL` | `multilingual-e5-large` / `nomic-embed-text` | embedding models |
+| **LLM** | | |
 | `LOGDET_LLM` | `auto` | `auto` (Gemini → Ollama Cloud → local ollama → rule-based) / `gemini` / `ollama` / `ollama-local` / `none` |
-| `LOGDET_GEMINI_MODEL` | `gemini-3.5-flash-lite` | Gemini model (stable, free tier); 503/429 → one retry on the default |
-| `LOGDET_GEMINI_GATEWAY` | auto-discovered | override the Gemini gateway base URL |
-| `LOGDET_AUTH_FILE` | `~/proj/auth.json` | local key file (direct-API mode only) |
-| `LOGDET_OLLAMA_GATEWAY` | auto-discovered | override the Ollama Cloud gateway base URL |
-| `LOGDET_MODEL` | `gemma4:31b` (Ollama Cloud) / `qwen2.5:3b` (local) | model name; if missing, auto-picked from `/api/tags` |
-| `LOGDET_WINDOW` | `120` | chunk window (seconds) |
-| `LOGDET_RETENTION_DAYS` | `30` | prune data older than N days after each ingest (`0` = keep forever) |
+| `LOGDET_GEMINI_MODEL` / `LOGDET_GEMINI_GATEWAY` / `GEMINI_API_KEY` | `gemini-3.5-flash-lite` / discovered / – | Gemini |
+| `LOGDET_MODEL` / `LOGDET_OLLAMA_GATEWAY` / `OLLAMA_API_KEY` / `OLLAMA_HOST` | `gemma4:31b` / discovered / – / `127.0.0.1:11434` | Ollama Cloud or local |
+| **public web endpoint** | | |
+| `LOGDET_ASK_PER_IP_PER_HOUR` / `LOGDET_ASK_DAILY_BUDGET` | `20` / `300` | `/api/ask` quota guard |
+| `LOGDET_PUBLIC_URL` | – | link used in alerts |
+| **continuous ingestion** | | |
+| `LOGDET_FLUSH_SECONDS` | `30` | `logdet tail` flush interval |
+| `LOGDET_INGEST_TOKEN` | – (disabled) | bearer token enabling `POST /api/ingest` |
+| `LOGDET_INGEST_MAX_BYTES` / `LOGDET_INGEST_PER_MINUTE` | `1000000` / `120` | ingest body limit and per-IP rate |
+| `LOGDET_ES_URL` / `LOGDET_ES_INDEX` / `LOGDET_ES_TS_FIELD` | – / `logs-*` / `@timestamp` | Elasticsearch source |
+| `LOGDET_ES_QUERY` / `LOGDET_ES_FIELDS` / `LOGDET_ES_LATENCY_UNIT` | – / – / `ms` | filter, field mapping (JSON), latency unit |
+| `LOGDET_ES_API_KEY` or `LOGDET_ES_USER` + `LOGDET_ES_PASSWORD` | – | Elasticsearch auth |
+| `LOGDET_ES_BATCH` / `LOGDET_ES_START` | `1000` / last 24 h | page size, first-run start |
+| `LOGDET_RETENTION_DAYS` | `30` | prune older data after each ingest (`0` = forever) |
+| **watch mode** | | |
+| `LOGDET_WATCH_CONFIG` | `LOGDET_HOME/logdet.toml`, then `./logdet.toml` | watch definitions (TOML or JSON) |
+| `LOGDET_SLACK_WEBHOOK` / `LOGDET_DISCORD_WEBHOOK` / `LOGDET_ALERT_WEBHOOK` | – | alert targets (never logged) |
+| `LOGDET_ALERT_REPLAY` | `0` | `1` also sends alerts produced by `watch --replay` |
+| `LOGDET_TRIGGER_TOKEN` | – (disabled) | bearer token for `POST /api/run/watch` and `/api/run/pull-es` |
+| `LOGDET_KEEP_AWAKE` | `0` | `1`: loops hold a Sprites task so the Sprite stays running (billed) |
 
 ## Continuous ingestion
 
@@ -205,6 +229,80 @@ logdet pull-es            # one pass (cron-friendly), or --loop --interval 60
 
 Default field names: `message|log|msg`, `log.level|level|severity`, `http.response.status_code|status`, `latency_ms|duration_ms|event.duration`, `service.name|service`, `url.path|path`.
 
+## Watch mode
+
+`logdet watch` asks your questions on a schedule and pings you before you ask. Each check runs the cheap statistics first: 5xx rate, p95 against the baseline, new error signatures, anomalous minutes. It calls the LLM **only when something is flagged and it is a new incident**, so the free-tier quota is spent once per incident.
+
+Findings (time, severity, reasons, cited summary, top lines) go to `LOGDET_HOME/findings.jsonl` and appear in the **Watch / Alerts** panel of the web UI (`GET /api/alerts`). Open incidents are tracked in `watch_state.json`. Repeated checks, restarts and Sprite pauses never re-alert the same incident, and a `resolved` finding is written when the metrics recover.
+
+```toml
+# logdet.toml (or set LOGDET_WATCH_CONFIG; JSON works too)
+[alerts]
+ui_url = "https://log-detective-xxxx.sprites.app"
+
+[[watch]]
+name = "checkout-health"
+question = "Are there any error spikes or latency regressions in the last 15 minutes?"
+interval = "1m"
+lookback = "15m"
+[watch.thresholds]
+error_rate = 0.05          # window 5xx rate
+p95_multiplier = 3.0       # window p95 / baseline p95
+new_signatures = 1         # new error signatures seen >= min_signature_count times
+min_signature_count = 5
+min_bad_minutes = 2        # anomalous minutes before alerting on the latency/5xx shape
+```
+
+```sh
+logdet watch            # loop (run it as a Sprite service, see "Sleep and background loops")
+logdet watch --once     # one pass, for cron / external schedulers
+logdet watch --replay --speed 60   # replay stored data on a simulated clock (1 simulated minute per second)
+logdet alert-test       # send a sample alert to every configured target
+```
+
+On the public demo, the Sprite runs `logdet watch --replay` over the fixed sample day at deploy time. The panel shows the 02:57 incident detected at 03:01 (two anomalous minutes and four new error signatures), with a Gemini summary and a `resolved` entry at 03:38.
+
+### Slack and Discord alerts
+
+- **Slack:** create an app at api.slack.com/apps, enable **Incoming Webhooks** and add one to a channel. Then set `LOGDET_SLACK_WEBHOOK=https://hooks.slack.com/services/...`. The message uses blocks: severity emoji and title, why it fired, the window, the summary, the top 3 cited lines in a code block, and a link to the UI.
+- **Discord:** in *Server Settings → Integrations → Webhooks*, create a webhook. Then set `LOGDET_DISCORD_WEBHOOK=https://discord.com/api/webhooks/...`. You get one embed coloured by severity, with fields and the same content. Discord's limits are respected (4096-character description, 1024-character fields, 10 embeds), and 429 responses are retried after `retry_after`.
+- **Generic:** `LOGDET_ALERT_WEBHOOK` receives the raw finding as JSON.
+- Targets can also live in the `[alerts]` table (`slack_webhook`, `discord_webhook`, `webhook`) or in the auth file (`slack`, `discord`, `webhook`). URLs are never printed or logged. Run `logdet alert-test` to verify delivery.
+
+## Sleep and background loops
+
+A Sprite pauses about 30 s after the last activity, and a paused Sprite **freezes every process**, services included. A running service alone does not keep it awake. So `logdet tail`, `logdet watch` and `logdet pull-es --loop` stop while the Sprite sleeps. They are built to resume correctly:
+
+- **Catch-up from checkpoints.** After a wake, `tail` reads everything appended while it was frozen, and `pull-es` continues from its last timestamp.
+- **No duplicate alerts.** Open incidents live in `watch_state.json`, so a resumed watcher keeps the incident open instead of re-alerting.
+- **Pushes wake the Sprite.** An incoming `POST /api/ingest` wakes the Sprite and is handled.
+
+Measured on a separate test Sprite (2026-11-24):
+
+| scenario | result |
+|---|---|
+| push to a Sprite reported `cold` | first request **HTTP 200 in 1.9 s** |
+| push after 10 min idle | **HTTP 200 in 5.0 s** |
+| retry of the same batch | `accepted 0, duplicates 20`. Across all runs, 130 lines sent = 130 events stored (no loss, no duplicates) |
+| steady push every 10 s | every request succeeded (~1.4 s each, including the Pinecone upsert). Between requests the Sprite still pauses |
+| `logdet tail` across a 6-minute pause | no flushes while paused; caught up right after the wake (10/10 lines, no duplicates) |
+| `logdet watch` across a 4-minute pause | 1 alert before and after the pause (deduplicated) |
+| wake latency of the web UI after 30 s / 10 / 30 / 60 min idle | 0.43–0.58 s |
+
+Choose how loops should behave:
+
+| option | how | trade-off |
+|---|---|---|
+| **sleep-friendly (default)** | run the loop as a service; let it pause | free while idle; the loop only works while something keeps the Sprite awake. Fine for push ingest, and for watch/tail when lag on wake is acceptable |
+| **stay awake** | `LOGDET_KEEP_AWAKE=1` on `tail` / `watch` / `pull-es --loop` | holds a Sprites Tasks API task (refreshed every 60 s, 5-min expiry, released on SIGTERM). Continuous detection, but the Sprite bills as running: about USD 0.4/day at 0.1 vCPU and 0.5 GB, against the free plan's USD 5/month |
+| **external scheduler** | cron / GitHub Actions / Orca automation calls `POST /api/run/watch` or `/api/run/pull-es` with `Authorization: Bearer $LOGDET_TRIGGER_TOKEN` | each call wakes the Sprite, runs one cycle and lets it sleep again. Cheapest reliable option for periodic checks. Needs `LOGDET_TRIGGER_TOKEN` (disabled when unset) |
+
+```sh
+# external scheduler, e.g. every 5 minutes
+curl -fsS -X POST -H "Authorization: Bearer $LOGDET_TRIGGER_TOKEN" --max-time 60 \
+     https://log-detective-xxxx.sprites.app/api/run/watch
+```
+
 ## Data retention
 
 Old data is pruned so the vector index and the local store don't grow forever:
@@ -247,13 +345,19 @@ node build.mjs                                                                  
 
 ## Public demo safeguards
 
-The public URL serves only `GET /`, `GET /api/health`, `POST /api/ask` and `POST /api/ask/stream`. The stream route returns NDJSON: `meta` with stats and evidence first, then answer `delta`s, then `done`. There is no ingest or admin endpoint over HTTP.
-`/api/ask` is capped per visitor (`LOGDET_ASK_PER_IP_PER_HOUR`, default 20), has a global daily budget (`LOGDET_ASK_DAILY_BUDGET`, default 300) and caches identical questions for 15 minutes, so free-tier quotas can't be drained. Upstream error details are never returned (only `llm_fallback` / `retrieval_fallback` flags), degraded answers are not cached, and malformed bodies get a 400.
+The public URL serves only `GET /`, `GET /api/health`, `GET /api/alerts`, `POST /api/ask` and `POST /api/ask/stream`. The stream route returns NDJSON: `meta` with stats and evidence, then answer `delta`s, then `done`.
+
+- `/api/ingest` and `/api/run/*` return 404 on the demo, because no tokens are set there.
+- `/api/ask` is capped per visitor (`LOGDET_ASK_PER_IP_PER_HOUR`, default 20) and by a global daily budget (`LOGDET_ASK_DAILY_BUDGET`, default 300).
+- Identical questions are cached for 15 minutes; degraded answers are never cached.
+- Upstream error details are never returned, only `llm_fallback` / `retrieval_fallback` flags.
+- Malformed bodies get a 400.
+- The UI retries with a "waking up" banner if the Sprite was asleep.
 
 ## Development
 
 ```sh
-uv run --with pytest pytest -q    # 55 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector, streaming and fallback tests, HTTP endpoint tests
+uv run --with pytest pytest -q    # 89 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector, streaming and fallback tests, HTTP endpoint, incremental ingest, Elasticsearch, watch and alert tests
 ```
 
 Notes on Sprites and the connector research are in [docs/SPRITES.md](docs/SPRITES.md).
