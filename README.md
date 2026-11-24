@@ -60,7 +60,7 @@ logdet ask "Why did checkout slow down at 3am yesterday?"
 logdet serve --port 8080    # web UI at http://localhost:8080
 ```
 
-Use your own logs: `logdet ingest /var/log/nginx/access.log ./app.jsonl --reset`.
+Use your own logs: `logdet ingest /var/log/nginx/access.log ./app.jsonl --reset`. The file name is the source id, so two files with the same name in different directories overwrite each other.
 
 Local dev against the real services (optional): keys are read from an auth file (default `~/proj/auth.json`, override with
 `LOGDET_AUTH_FILE`; format `{"pinecone": {"type": "api", "key": "..."}, "google": {...}, "ollama": {...}}`) or from the env vars
@@ -137,13 +137,13 @@ node build.mjs                                                                  
 
 ## Public demo safeguards
 
-The public URL serves only `GET /`, `GET /api/health` and `POST /api/ask`. There is no ingest or admin endpoint over HTTP.
-`/api/ask` is capped per visitor (`LOGDET_ASK_PER_IP_PER_HOUR`, default 20), has a global daily budget (`LOGDET_ASK_DAILY_BUDGET`, default 300) and caches identical questions for 15 minutes, so free-tier quotas can't be drained. Errors return a generic message.
+The public URL serves only `GET /`, `GET /api/health`, `POST /api/ask` and `POST /api/ask/stream`. The stream route returns NDJSON: `meta` with stats and evidence first, then answer `delta`s, then `done`. There is no ingest or admin endpoint over HTTP.
+`/api/ask` is capped per visitor (`LOGDET_ASK_PER_IP_PER_HOUR`, default 20), has a global daily budget (`LOGDET_ASK_DAILY_BUDGET`, default 300) and caches identical questions for 15 minutes, so free-tier quotas can't be drained. Upstream error details are never returned (only `llm_fallback` / `retrieval_fallback` flags), degraded answers are not cached, and malformed bodies get a 400.
 
 ## Development
 
 ```sh
-uv run --with pytest pytest -q    # 30 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector + fallback tests
+uv run --with pytest pytest -q    # 55 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector, streaming and fallback tests, HTTP endpoint tests
 ```
 
 Notes on Sprites and the connector research are in [docs/SPRITES.md](docs/SPRITES.md).
