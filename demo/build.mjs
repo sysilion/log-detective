@@ -1,5 +1,5 @@
 // Build demo/out/intro.mp4: narration (macOS `say`) + Playwright screen recordings + burned-in captions, muxed with ffmpeg.
-// v1 runs log-detective locally: real Pinecone retrieval (auth.json key) + rule-based report (no LLM yet).
+// v1 runs log-detective locally: real Pinecone retrieval + Gemini answers using direct keys from the auth file.
 // Re-record on a Sprite with the Pinecone + Ollama Cloud connectors later.
 //   usage: cd demo && npm i && node build.mjs        (env: VOICE=Samantha RATE=180 PORT=8799)
 import { spawn, spawnSync } from "node:child_process";
@@ -15,12 +15,12 @@ const VOICE = process.env.VOICE || "Samantha";
 const RATE = process.env.RATE || "180";
 const PORT = Number(process.env.PORT || 8799);
 const W = 1920, H = 1080, FPS = 30;
-const BADGE = "v1 preview · local run · real Pinecone retrieval · rule-based report (LLM pending)";
+const BADGE = process.env.BADGE || "v1 · recorded locally · real Pinecone + Gemini (direct keys) · Sprite connectors next";
 const ENV = { ...process.env, LOGDET_HOME: path.join(OUT, "home"), LOGDET_TZ: "Asia/Seoul",
   // real Pinecone (direct API key from ../auth.json, never printed); falls back to local if no key
   LOGDET_VECTOR: process.env.LOGDET_VECTOR || "auto", LOGDET_PINECONE_NAMESPACE: "demo-video",
-  LOGDET_AUTH_FILE: process.env.LOGDET_AUTH_FILE || path.join(ROOT, "auth.json"),
-  LOGDET_EMBED: "hash", LOGDET_LLM: "none", LOGDET_DISCOVER: "0", PYTHONPATH: ROOT };
+  ...(process.env.LOGDET_AUTH_FILE ? { LOGDET_AUTH_FILE: process.env.LOGDET_AUTH_FILE } : {}),
+  LOGDET_EMBED: "hash", LOGDET_LLM: process.env.LOGDET_LLM || "auto", LOGDET_DISCOVER: "0", PYTHONPATH: ROOT };
 
 // caption line -> optional pronunciation override for TTS
 const SCENES = [
@@ -37,19 +37,19 @@ const SCENES = [
     "Then ask, in plain English."] },
   { id: "ui1", type: "ui", badge: true, q: "Why did checkout slow down at 3am yesterday?", lines: [
     "Same question in the web UI.",
-    "It compares latency and errors against a baseline and finds the spike:",
+    "It compares latency and errors against a baseline,",
+    "pulls the matching log chunks from Pinecone, and asks Gemini for a root cause.",
     ["p95 latency jumped about 23 times, with up to 38% server errors.",
      "P 95 latency jumped about 23 times, with up to 38 percent server errors."],
-    "Then it pulls the matching log chunks and names the likely trigger:",
-    ["a nightly report job that started at 2:57 and exhausted the shared database connection pool.",
-     "a nightly report job that started at 2 57, and exhausted the shared database connection pool."],
+    ["The trigger: a nightly report job that started at 2:57 and exhausted the shared database connection pool.",
+     "The trigger: a nightly report job that started at 2 57, and exhausted the shared database connection pool."],
     "Every claim cites the exact log lines."] },
   { id: "ui2", type: "ui", badge: true, q: "What were the payment warnings around 1:30am yesterday?", lines: [
     "And it doesn't chase red herrings:",
     ["the payment warnings at 1:30 had no real impact.", "the payment warnings at one thirty had no real impact."]] },
   { id: "arch", type: "card", lines: [
     "Under the hood, raw logs stay on the Sprite.",
-    "Pinecone handles time-filtered vector search, and Ollama Cloud writes the hypothesis.",
+    "Pinecone handles time-filtered vector search, and Gemini writes the hypothesis.",
     "Both are reached through Sprites connectors, so no API keys live on the box."] },
   { id: "outro", type: "card", lines: [
     ["log-detective. Built for Fly.io Hacksgiving.", "log detective. Built for Fly dot I O Hacksgiving."],

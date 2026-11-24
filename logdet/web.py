@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import json
+import os
 import threading
+import time
+from collections import deque
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -13,9 +16,51 @@ from .config import Config
 STATIC = Path(__file__).parent / "static"
 
 
+class AskGuard:
+    """Protect free-tier quotas on a public URL: per-IP rate limit, global daily budget, answer cache."""
+
+    def __init__(self, per_ip_per_hour: int, daily_budget: int, cache_seconds: int = 900):
+        self.per_ip, self.budget, self.cache_s = per_ip_per_hour, daily_budget, cache_seconds
+        self.hits: dict[str, deque] = {}
+        self.day, self.used = time.strftime("%Y-%m-%d"), 0
+        self.cache: dict[str, tuple[float, dict]] = {}
+        self.lock = threading.Lock()
+
+    def cached(self, key: str) -> dict | None:
+        with self.lock:
+            hit = self.cache.get(key)
+            return hit[1] if hit and time.time() - hit[0] < self.cache_s else None
+
+    def store(self, key: str, res: dict) -> None:
+        with self.lock:
+            if len(self.cache) > 500:
+                self.cache.clear()
+            self.cache[key] = (time.time(), res)
+
+    def admit(self, ip: str) -> str | None:
+        """Return None if allowed, else a reason."""
+        now = time.time()
+        with self.lock:
+            today = time.strftime("%Y-%m-%d")
+            if today != self.day:
+                self.day, self.used = today, 0
+            q = self.hits.setdefault(ip, deque())
+            while q and now - q[0] > 3600:
+                q.popleft()
+            if len(q) >= self.per_ip:
+                return f"rate limit: {self.per_ip} questions per hour per visitor"
+            if self.used >= self.budget:
+                return "daily demo budget used up, please try again tomorrow"
+            q.append(now)
+            self.used += 1
+            return None
+
+
 def serve(cfg: Config, host: str = "0.0.0.0", port: int = 8080) -> None:
     det = Detective(cfg)
     lock = threading.Lock()
+    guard = AskGuard(int(os.environ.get("LOGDET_ASK_PER_IP_PER_HOUR", "20")),
+                     int(os.environ.get("LOGDET_ASK_DAILY_BUDGET", "300")))
 
     class H(BaseHTTPRequestHandler):
         def _send(self, code: int, body: bytes, ctype: str) -> None:
@@ -45,18 +90,24 @@ def serve(cfg: Config, host: str = "0.0.0.0", port: int = 8080) -> None:
             try:
                 n = int(self.headers.get("Content-Length") or 0)
                 req = json.loads(self.rfile.read(min(n, 65536)) or b"{}")
-                q = str(req.get("q", "")).strip()[:500]
+                q = " ".join(str(req.get("q", "")).split())[:300]
                 if not q:
                     return self._json(400, {"error": "empty question"})
-                now = None
-                if req.get("now"):
-                    now = datetime.fromisoformat(req["now"])
-                    now = now if now.tzinfo else now.replace(tzinfo=cfg.tz)
-                with lock:
-                    res = det.ask(q, now=now, use_llm=not req.get("no_llm"))
+                key = q.lower()
+                res = guard.cached(key)
+                if res is None:
+                    ip = (self.headers.get("Fly-Client-IP") or (self.headers.get("X-Forwarded-For") or "")
+                          .split(",")[0].strip() or self.client_address[0])
+                    reason = guard.admit(ip)
+                    if reason:
+                        return self._json(429, {"error": reason})
+                    with lock:
+                        res = det.ask(q)
+                    guard.store(key, res)
                 self._json(200, res)
             except Exception as e:
-                self._json(500, {"error": str(e)[:500]})
+                print(f"[web] ask failed: {e}")
+                self._json(500, {"error": "internal error"})
 
         def log_message(self, fmt, *args):
             print(f"[web] {self.address_string()} {fmt % args}")

@@ -18,7 +18,7 @@ export PATH="$HOME/.local/bin:$PATH"
 
 python3 --version
 echo "--- connectors visible to this sprite:"
-curl -s https://api.sprites.dev/v1/gateway/list || true
+curl -s https://api.sprites.dev/v1/gateway/list | python3 -c 'import json,sys; d=json.load(sys.stdin); print([c.get("provider") for c in d.get("connections", [])] or "none (check connector access policies)")' || true
 echo
 echo "--- logdet doctor"
 logdet doctor

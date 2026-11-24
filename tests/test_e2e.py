@@ -51,3 +51,14 @@ def test_retrieval_is_time_filtered(det):
     lo, hi = datetime.fromisoformat(res["range"]["start"]).timestamp() - 1800, \
         datetime.fromisoformat(res["range"]["end"]).timestamp()
     assert res["retrieved"] and all(lo - 120 <= r["ts_start"] <= hi for r in res["retrieved"])
+
+
+def test_ask_guard_limits():
+    from logdet.web import AskGuard
+    g = AskGuard(per_ip_per_hour=2, daily_budget=3)
+    assert g.admit("a") is None and g.admit("a") is None
+    assert "rate limit" in g.admit("a")
+    assert g.admit("b") is None
+    assert "budget" in g.admit("c")
+    g.store("q", {"answer": "x"})
+    assert g.cached("q") == {"answer": "x"} and g.cached("other") is None

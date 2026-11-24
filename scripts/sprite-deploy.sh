@@ -20,5 +20,5 @@ sprite exec -s "$SPRITE" --env "LOGDET_TZ=${LOGDET_TZ:-Asia/Seoul},LOGDET_MODEL=
   sh -c 'cd "$HOME/log-detective" && sh scripts/sprite-setup.sh'
 
 echo "==> sprite URL"
-sprite url -s "$SPRITE" || true
-echo "(the URL is org-only by default; for the public demo run: sprite url update -s $SPRITE --auth public)"
+sprite info -s "$SPRITE" | grep -E "URL|Auth" || true
+echo "(the URL is org-only by default; for a public demo run: sprite config update -s $SPRITE --url-auth public)"
