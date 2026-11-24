@@ -66,6 +66,12 @@ class Config:
 
     # continuous ingestion
     flush_seconds: float = field(default_factory=lambda: float(_env("LOGDET_FLUSH_SECONDS", "30")))
+    # HTTP push ingest (POST /api/ingest) is disabled unless a token is set; never set it on the public demo
+    ingest_token: str = field(default_factory=lambda: _env("LOGDET_INGEST_TOKEN"))
+    ingest_max_bytes: int = field(default_factory=lambda: int(_env("LOGDET_INGEST_MAX_BYTES", "1000000")))
+    ingest_per_minute: int = field(default_factory=lambda: int(_env("LOGDET_INGEST_PER_MINUTE", "120")))
+    # token for external schedulers to trigger one watch / pull cycle (POST /api/run/...); disabled when unset
+    trigger_token: str = field(default_factory=lambda: _env("LOGDET_TRIGGER_TOKEN"))
 
     # data retention: events, chunks and vectors whose window ended before now - N days are pruned (0 = forever)
     retention_days: float = field(default_factory=lambda: float(_env("LOGDET_RETENTION_DAYS", "30")))

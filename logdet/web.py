@@ -10,17 +10,21 @@ budget and an answer cache, so a public URL can't drain the free-tier quotas.
 """
 from __future__ import annotations
 
+import hmac
 import json
 import os
+import re
 import threading
 import time
 from collections import deque
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from .agent import Detective
 from .config import Config
+from .ingest import IncrementalIngestor, parse_payload
 
 STATIC = Path(__file__).parent / "static"
 MAX_BODY = 4096
@@ -87,8 +91,39 @@ class BadRequest(ValueError):
     pass
 
 
+class MinuteLimiter:
+    """Per-key sliding one-minute window (used for the authenticated ingest route)."""
+
+    def __init__(self, per_minute: int):
+        self.per_minute, self.hits, self.lock = per_minute, {}, threading.Lock()
+
+    def allow(self, key: str) -> bool:
+        now = time.time()
+        with self.lock:
+            q = self.hits.setdefault(key, deque())
+            while q and now - q[0] > 60:
+                q.popleft()
+            if len(q) >= self.per_minute:
+                return False
+            q.append(now)
+            return True
+
+
+_SOURCE_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+
+
+def bearer_ok(header: str | None, token: str) -> bool:
+    """Constant-time check of 'Authorization: Bearer <token>'. An empty configured token never matches."""
+    if not token or not header or not header.startswith("Bearer "):
+        return False
+    return hmac.compare_digest(header[7:].strip().encode(), token.encode())
+
+
 def make_handler(det: Detective, cfg: Config, guard: AskGuard):
     db_lock = threading.Lock()  # SQLite connection is shared; the LLM call runs outside this lock
+    ingest_limiter = MinuteLimiter(cfg.ingest_per_minute)
+    ingestor = IncrementalIngestor(det)
+    ingest_slots = threading.BoundedSemaphore(2)
 
     class Handler(BaseHTTPRequestHandler):
         timeout = 15  # seconds; slow or idle clients can't pin threads
@@ -96,16 +131,18 @@ def make_handler(det: Detective, cfg: Config, guard: AskGuard):
         sys_version = ""
 
         # ------------------------------------------------------------ helpers
-        def _send(self, code: int, body: bytes, ctype: str) -> None:
+        def _send(self, code: int, body: bytes, ctype: str, headers: dict | None = None) -> None:
             self.send_response(code)
             self.send_header("Content-Type", ctype)
+            for k, v in (headers or {}).items():
+                self.send_header(k, v)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("X-Content-Type-Options", "nosniff")
             self.end_headers()
             self.wfile.write(body)
 
-        def _json(self, code: int, obj) -> None:
-            self._send(code, json.dumps(obj, ensure_ascii=False, default=str).encode(), "application/json")
+        def _json(self, code: int, obj, headers: dict | None = None) -> None:
+            self._send(code, json.dumps(obj, ensure_ascii=False, default=str).encode(), "application/json", headers)
 
         def _client_ip(self) -> str:
             # Fly's proxy sets Fly-Client-IP; otherwise trust only the right-most X-Forwarded-For hop
@@ -149,7 +186,10 @@ def make_handler(det: Detective, cfg: Config, guard: AskGuard):
                 self._send(404, b"not found", "text/plain")
 
         def do_POST(self):
-            if self.path not in ("/api/ask", "/api/ask/stream"):
+            path = urlsplit(self.path).path
+            if path == "/api/ingest" and cfg.ingest_token:
+                return self._ingest()
+            if path not in ("/api/ask", "/api/ask/stream"):
                 return self._send(404, b"not found", "text/plain")
             try:
                 q = self._question()
@@ -179,6 +219,49 @@ def make_handler(det: Detective, cfg: Config, guard: AskGuard):
                     self._json(500, {"error": "internal error"})
                 except OSError:
                     pass
+
+        def _ingest(self) -> None:
+            """Authenticated push ingest: NDJSON, JSON array or plain lines; ?source=<name>."""
+            if not bearer_ok(self.headers.get("Authorization"), cfg.ingest_token):
+                return self._json(401, {"error": "missing or invalid bearer token"})
+            if not ingest_limiter.allow(self._client_ip()):
+                return self._json(429, {"error": f"rate limit: {cfg.ingest_per_minute} requests per minute"},
+                                  {"Retry-After": "60"})
+            qs = parse_qs(urlsplit(self.path).query)
+            source = (qs.get("source") or [self.headers.get("X-Logdet-Source") or "http"])[0]
+            if not _SOURCE_RE.match(source):
+                return self._json(400, {"error": "source must match [A-Za-z0-9._-]{1,64}"})
+            try:
+                n = int(self.headers.get("Content-Length") or -1)
+            except ValueError:
+                n = -1
+            if n < 0:
+                return self._json(411, {"error": "Content-Length required"})
+            if n > cfg.ingest_max_bytes:
+                return self._json(413, {"error": f"body too large (max {cfg.ingest_max_bytes} bytes)"})
+            body = self.rfile.read(n)
+            key = (self.headers.get("Idempotency-Key") or "").strip()[:200]
+            if key:
+                with db_lock:
+                    prev = det.store.idempotent_response(f"{source}:{key}")
+                if prev:
+                    return self._send(200, prev.encode(), "application/json")
+            if not ingest_slots.acquire(timeout=10):  # overloaded: tell the sender to come back
+                return self._json(503, {"error": "busy, retry later"}, {"Retry-After": "5"})
+            try:
+                events = parse_payload(body, source, cfg.tz)
+                with db_lock:
+                    res = ingestor.add_new(source, events)
+                    out = json.dumps({"accepted": res["events"], "duplicates": res["duplicates"],
+                                      "windows_upserted": res["chunks"], "source": source})
+                    if key:
+                        det.store.remember_key(f"{source}:{key}", out, time.time())
+            except Exception as e:  # nothing was kept (rolled back): safe to retry the same batch
+                print(f"[web] ingest failed: {e!r}")
+                return self._json(503, {"error": "ingest temporarily unavailable, retry"}, {"Retry-After": "10"})
+            finally:
+                ingest_slots.release()
+            self._send(200, out.encode(), "application/json")
 
         def _stream(self, q: str, key: str, cached: dict | None) -> None:
             self.send_response(200)

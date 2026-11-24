@@ -49,6 +49,18 @@ class Store:
         self.db = sqlite3.connect(self.path, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.executescript(SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """Add columns introduced after the first release (idempotent)."""
+        cols = {r[1] for r in self.db.execute("PRAGMA table_info(events)")}
+        if "ehash" not in cols:
+            self.db.execute("ALTER TABLE events ADD COLUMN ehash TEXT")
+        self.db.executescript("""
+            CREATE UNIQUE INDEX IF NOT EXISTS events_ehash ON events(ehash);
+            CREATE TABLE IF NOT EXISTS ingest_keys (key TEXT PRIMARY KEY, ts REAL, response TEXT);
+        """)
+        self.db.commit()
 
     def reset(self) -> None:
         self.db.executescript("DELETE FROM events; DELETE FROM chunks;")
@@ -59,20 +71,42 @@ class Store:
         self.db.execute("DELETE FROM chunks WHERE source=?", (source,))
         self.db.commit()
 
-    def add_events(self, events: Iterable[Event]) -> int:
+    def add_events(self, events: Iterable[Event], commit: bool = True, hashes: list[str] | None = None) -> int:
+        events = list(events)
+        hashes = hashes or [None] * len(events)
         rows = [(e.source, e.lineno, e.ts, e.level, e.status, e.latency_ms, e.path, e.service,
-                 e.msg, signature(e), int(e.is_error), e.raw) for e in events]
+                 e.msg, signature(e), int(e.is_error), e.raw, h) for e, h in zip(events, hashes)]
         self.db.executemany(
-            "INSERT INTO events(source,lineno,ts,level,status,latency_ms,path,service,msg,sig,is_error,raw)"
-            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", rows)
-        self.db.commit()
+            "INSERT INTO events(source,lineno,ts,level,status,latency_ms,path,service,msg,sig,is_error,raw,ehash)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", rows)
+        if commit:
+            self.db.commit()
         return len(rows)
 
-    def add_chunks(self, chunks: list[Chunk]) -> None:
+    def known_hashes(self, hashes: list[str]) -> set[str]:
+        """Which of these event hashes are already stored (for idempotent push ingest)."""
+        found: set[str] = set()
+        for i in range(0, len(hashes), 500):
+            part = hashes[i:i + 500]
+            q = ",".join("?" * len(part))
+            found.update(r[0] for r in self.db.execute(f"SELECT ehash FROM events WHERE ehash IN ({q})", part))
+        return found
+
+    def idempotent_response(self, key: str) -> str | None:
+        r = self.db.execute("SELECT response FROM ingest_keys WHERE key=?", (key,)).fetchone()
+        return r[0] if r else None
+
+    def remember_key(self, key: str, response: str, ts: float) -> None:
+        self.db.execute("INSERT OR REPLACE INTO ingest_keys VALUES (?,?,?)", (key, ts, response))
+        self.db.execute("DELETE FROM ingest_keys WHERE ts < ?", (ts - 7 * 86400,))  # keys live 7 days
+        self.db.commit()
+
+    def add_chunks(self, chunks: list[Chunk], commit: bool = True) -> None:
         self.db.executemany(
             "INSERT OR REPLACE INTO chunks VALUES (?,?,?,?,?,?,?)",
             [(c.id, c.source, c.ts_start, c.ts_end, c.n_lines, c.n_errors, c.text) for c in chunks])
-        self.db.commit()
+        if commit:
+            self.db.commit()
 
     def events(self, start: float, end: float) -> list[sqlite3.Row]:
         return self.db.execute(

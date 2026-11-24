@@ -13,6 +13,7 @@ so citations stay unique.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import threading
@@ -55,19 +56,43 @@ class IncrementalIngestor:
         self.det = det
         self.cfg = det.cfg
 
-    def add(self, source: str, events: list[Event]) -> dict:
+    def add(self, source: str, events: list[Event], hashes: list[str] | None = None) -> dict:
+        """Store events and upsert their windows atomically: if the vector upsert fails, nothing is kept,
+        so a retried batch is processed again in full (and event hashes stop double counting)."""
         if not events:
             return {"events": 0, "chunks": 0}
         st = self.det.store
-        st.add_events(events)
-        w = self.cfg.window_seconds
-        buckets = sorted({int(e.ts // w) for e in events})
-        chunks = []
-        for b in buckets:
-            chunks += build_chunks(st.events_for(source, b * w, (b + 1) * w), w)
-        st.add_chunks(chunks)
-        self.det.upsert_chunks(chunks)
+        try:
+            st.add_events(events, commit=False, hashes=hashes)
+            w = self.cfg.window_seconds
+            buckets = sorted({int(e.ts // w) for e in events})
+            chunks = []
+            for b in buckets:
+                chunks += build_chunks(st.events_for(source, b * w, (b + 1) * w), w)
+            self.det.upsert_chunks(chunks)
+            st.add_chunks(chunks, commit=False)
+            st.db.commit()
+        except Exception:
+            st.db.rollback()
+            raise
         return {"events": len(events), "chunks": len(chunks)}
+
+    def add_new(self, source: str, events: list[Event]) -> dict:
+        """Idempotent add for pushed batches: drop events already stored (hash of source + ts + raw line)
+        and in-batch duplicates, then renumber and add the rest."""
+        hashes = [event_hash(e) for e in events]
+        known = self.det.store.known_hashes(hashes)
+        keep, keep_h, seen = [], [], set()
+        for e, h in zip(events, hashes):
+            if h in known or h in seen:
+                continue
+            seen.add(h)
+            keep.append(e)
+            keep_h.append(h)
+        self.renumber(source, keep)
+        res = self.add(source, keep, keep_h)
+        res["duplicates"] = len(events) - len(keep)
+        return res
 
     def renumber(self, source: str, events: list[Event]) -> list[Event]:
         """Give events per-source sequence numbers continuing after what is already stored."""
@@ -76,6 +101,10 @@ class IncrementalIngestor:
             e.lineno = base + i
             e.source = source
         return events
+
+
+def event_hash(e: Event) -> str:
+    return hashlib.sha1(f"{e.source}|{e.ts:.6f}|{e.raw}".encode()).hexdigest()
 
 
 def read_new_lines(path: Path, ck: dict) -> tuple[list[str], dict]:
