@@ -13,7 +13,10 @@ $ logdet ask "어제 새벽 3시에 왜 느려졌어?"     # (abbreviated exampl
 이 공유 커넥션 풀(50개)을 점유해 checkout 요청이 커넥션을 3초간 기다리다 타임아웃 [E4] ...
 ```
 
-Built for **Fly.io Hacksgiving 2026**. It uses Sprites connectors: **Pinecone** (vector search over log chunks) and **Google Gemini** (free-tier `gemini-3.5-flash-lite` writes the root-cause hypothesis). **Ollama Cloud** is supported as an alternative LLM.
+Built for **Fly.io Hacksgiving 2026**.
+
+**Live demo:** https://log-detective-cekg.sprites.app (a public Sprite; the demo clock is pinned so "yesterday 3am" means the sample incident).
+**Intro video:** build it with `demo/build.mjs` (see [Demo video](#demo-video)). It uses Sprites connectors: **Pinecone** (vector search over log chunks) and **Google Gemini** (free-tier `gemini-3.5-flash-lite` writes the root-cause hypothesis). **Ollama Cloud** is supported as an alternative LLM.
 
 > **Submission blurb:** log-detective is a log-investigation agent living on a Fly.io Sprite. Ask "why did checkout slow down at 3am yesterday?" in English or Korean and it computes latency/error spikes against a baseline, retrieves the relevant log chunks from Pinecone, and has an LLM (Gemini, or Ollama Cloud) write a root-cause hypothesis that cites the exact log lines, all through Sprites connectors, so no API keys live on the box.
 
@@ -114,19 +117,33 @@ There are red herrings too: a routine deploy at 01:10, slow payment-provider war
 | time | screen | action / narration |
 |---|---|---|
 | 0:00–0:10 | browser, empty UI | "It's 9am. Checkout was slow at 3am. Instead of grepping three log files, I ask the agent that lives on my Sprite." |
-| 0:10–0:25 | terminal | `sprite list` then `sprite exec -s log-detective -- ~/.local/bin/logdet doctor`. Point at `pinecone … via gateway` and `ollama-cloud(sprites-connector)`: "two Sprites connectors, and no API keys on the box." |
+| 0:10–0:25 | terminal | `sprite list` then `sprite exec -s log-detective -- ~/.local/bin/logdet doctor`. Point at `pinecone via gateway` and `gemini(sprites-connector)`: "two Sprites connectors, and no API keys on the box." |
 | 0:25–0:35 | terminal | `sprite exec -s log-detective -- ~/.local/bin/logdet demo`. "30k log lines from nginx, the app and Postgres, chunked and embedded into Pinecone." |
 | 0:35–1:05 | browser | Click **어제 새벽 3시에 왜 느려졌어?** Pause on the p95 chart (shaded anomaly), the tiles (141 ms → 3.2 s, 5xx 38%), then the answer naming the **02:57 nightly_sales_report job** exhausting the shared connection pool, with [E#] citations. Scroll the evidence list. |
 | 1:05–1:20 | browser | Click **어제 새벽 1시 반쯤 결제 경고는 뭐였어?** It says there was no real impact, so it doesn't chase red herrings. |
 | 1:20–1:30 | terminal | `sprite exec -s log-detective -- ~/.local/bin/logdet ask "Why did checkout slow down at 3am yesterday?"`: the same investigation in English, from the CLI. |
-| 1:30–1:40 | README / repo | "log-detective on a Fly.io Sprite, Pinecone + Ollama connectors. Code on GitHub. #Hacksgiving @flydotio" |
+| 1:30–1:40 | README / repo | "log-detective on a Fly.io Sprite, Pinecone + Gemini via Sprites connectors. Code on GitHub. #Hacksgiving @flydotio" |
 
 Post texts and the form description are in [docs/SUBMISSION.md](docs/SUBMISSION.md).
+
+## Demo video
+
+`demo/build.mjs` records a 1080p intro video (`demo/out/intro.mp4`, about 90 s). It narrates with macOS `say`, captures scenes with Playwright, burns in captions, and muxes with ffmpeg:
+```sh
+cd demo && npm i
+SPRITE=log-detective UI_URL=https://log-detective-cekg.sprites.app node build.mjs   # record the live Sprite
+node build.mjs                                                                        # or a local run
+```
+
+## Public demo safeguards
+
+The public URL serves only `GET /`, `GET /api/health` and `POST /api/ask`. There is no ingest or admin endpoint over HTTP.
+`/api/ask` is capped per visitor (`LOGDET_ASK_PER_IP_PER_HOUR`, default 20), has a global daily budget (`LOGDET_ASK_DAILY_BUDGET`, default 300) and caches identical questions for 15 minutes, so free-tier quotas can't be drained. Errors return a generic message.
 
 ## Development
 
 ```sh
-uv run --with pytest pytest -q    # 28 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector + fallback tests
+uv run --with pytest pytest -q    # 30 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector + fallback tests
 ```
 
 Notes on Sprites and the connector research are in [docs/SPRITES.md](docs/SPRITES.md).

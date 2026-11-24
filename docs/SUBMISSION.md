@@ -8,7 +8,8 @@ log-detective is a personal SRE agent that lives on a Fly.io Sprite. Ask it "why
 
 ## Form: links
 - Code: https://github.com/sysilion/log-detective
-- Demo: <link to the X / Bluesky / LinkedIn / Reddit post with the video>
+- Live demo: https://log-detective-cekg.sprites.app
+- Demo video: <link to the X / Bluesky / LinkedIn / Reddit post with demo/out/intro.mp4>
 
 ## Social post (X / Bluesky, short)
 Built log-detective for #Hacksgiving: an agent living on a @flydotio Sprite that answers "why was checkout slow at 3am?" 🔎
@@ -16,6 +17,7 @@ Built log-detective for #Hacksgiving: an agent living on a @flydotio Sprite that
 It spots the spike, searches logs in Pinecone, and Gemini names the culprit with cited log lines. All via Sprites connectors, zero keys on the box.
 
 github.com/sysilion/log-detective
+Live: log-detective-cekg.sprites.app
 
 (X: @flydotio. On Bluesky/LinkedIn, check Fly.io's handle there before posting.)
 
