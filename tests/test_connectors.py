@@ -20,6 +20,7 @@ class FakeGateway:
         self.calls, self.vectors, self.deletes = [], {}, []
         self.fail_query = False      # Pinecone /query -> 503
         self.fail_chat = False       # Ollama /api/chat -> 500
+        self.sse_truncate = False    # Gemini SSE closes early without finishReason
         self.cloud_models = None     # e.g. ["glm-5.3-flash"]: /api/chat 404s for other models
         fake = self
 
@@ -77,6 +78,10 @@ class FakeGateway:
                     chunks = ["Gemini ", "streams: pool ", "exhausted [E1]"]
                     lines = [{"candidates": [{"content": {"parts": [{"text": "hmm", "thought": True}]}}]}] + \
                         [{"candidates": [{"content": {"parts": [{"text": c}]}}]} for c in chunks]
+                    if not fake.sse_truncate:
+                        lines[-1]["candidates"][0]["finishReason"] = "STOP"
+                    else:
+                        lines = lines[:2]
                     payload = "".join(f"data: {json.dumps(x)}\r\n\r\n" for x in lines).encode()
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
@@ -316,3 +321,16 @@ def test_pinecone_prune_through_gateway_dry_run_and_batches(gw, gw_det):
     assert len(gw.vectors) == total - expected and all(n <= 50 for n in gw.deletes) and len(gw.deletes) > 1
     assert all(v["metadata"]["ts_end"] >= cutoff for v in gw.vectors.values())
     assert retention_cutoff(cutoff, 0) is None
+
+
+def test_truncated_gemini_stream_recovers_full_answer(gw, gw_det):
+    gw.sse_truncate = True
+    gw_det.cfg.gemini_gateway = gw.base + "/gemini/conn_g"
+    try:
+        events = list(gw_det.answer_stream(gw_det.prepare(Q, now=NOW)))
+    finally:
+        gw.sse_truncate = False
+        gw_det.cfg.gemini_gateway = ""
+    done = events[-1][1]
+    # deltas showed a partial answer; the final answer comes from the non-streaming call, error cleared
+    assert done["answer"] == "Gemini says: pool exhausted [E1]" and done["llm_error"] is None

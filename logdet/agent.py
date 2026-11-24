@@ -191,7 +191,15 @@ class Detective:
                     yield "delta", chunk
             except Exception as e:
                 err = str(e)[:300]
-            if parts:  # a partial answer is still better than switching to a different text mid-way
+            if parts and err:  # stream broke mid-answer: fetch the full answer once, non-streaming
+                try:
+                    full = llm.chat(SYSTEM_PROMPT, self._prompt(inv))
+                    if full:
+                        yield "done", self.result(inv, full, llm.name, None)
+                        return
+                except Exception as e2:
+                    err = f"{err}; recovery failed: {str(e2)[:150]}"
+            if parts:  # a partial answer (flagged via llm_error, so it is never cached)
                 yield "done", self.result(inv, "".join(parts).strip(), llm.name, err)
                 return
         text = heuristic_report(inv.question, inv.stats, inv.evidence, self.cfg.tz)

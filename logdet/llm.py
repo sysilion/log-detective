@@ -26,6 +26,10 @@ PREFERRED_PREFIXES = ["gemma4:31b", "gemma4", "glm-5.3-flash", "deepseek-v4.1-fl
                       "mistral-large", "glm-5", "kimi-k3", "deepseek", "qwen", "llama"]
 
 
+class IncompleteStream(RuntimeError):
+    """A streamed answer ended before the model signalled completion."""
+
+
 def pick_model(available: list[str], preferred: list[str] | None = None) -> str | None:
     for pre in preferred or PREFERRED_PREFIXES:
         hit = next((m for m in available if m and m.startswith(pre)), None)
@@ -54,13 +58,17 @@ class OllamaChat:
         """Native Ollama streaming: NDJSON lines with message.content deltas."""
         body = {"model": self.model, "stream": True, "options": {"temperature": 0.2},
                 "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
+        done = False
         for line in stream_lines("POST", self.base + "/api/chat", body, self.headers, timeout=300):
             obj = json.loads(line)
             if obj.get("error"):
                 raise RuntimeError(str(obj["error"])[:200])
+            done = done or bool(obj.get("done"))
             text = (obj.get("message") or {}).get("content", "")
             if text:
                 yield text
+        if not done:
+            raise IncompleteStream("Ollama stream ended without done=true")
 
     def chat(self, system: str, user: str) -> str:
         try:
@@ -136,12 +144,17 @@ class GeminiChat:
 
     def _stream(self, system: str, user: str):
         url = f"{self.base}/v1beta/models/{self.model}:streamGenerateContent?alt=sse"
+        finish = None
         for line in stream_lines("POST", url, self._body(system, user), self.headers, timeout=120):
             if not line.startswith("data:"):
                 continue
-            text = gemini_text(json.loads(line[5:].strip()))
+            obj = json.loads(line[5:].strip())
+            finish = ((obj.get("candidates") or [{}])[0].get("finishReason")) or finish
+            text = gemini_text(obj)
             if text:
                 yield text
+        if finish != "STOP":  # connection closed early or the model stopped for another reason
+            raise IncompleteStream(f"Gemini stream ended without STOP (finishReason={finish})")
 
     def _chat(self, system: str, user: str) -> str:
         res = request_json("POST", f"{self.base}/v1beta/models/{self.model}:generateContent",
