@@ -21,6 +21,7 @@ default watch. Example:
     p95_multiplier = 3.0       # window p95 / baseline p95
     new_signatures = 1         # how many new error signatures (each seen >= min_signature_count times)
     min_signature_count = 5
+    min_bad_minutes = 2        # anomalous minutes before alerting on the latency/5xx shape
 """
 from __future__ import annotations
 
@@ -62,6 +63,7 @@ class Watch:
     p95_multiplier: float = 3.0
     new_signatures: int = 1
     min_signature_count: int = 5
+    min_bad_minutes: int = 2   # anomalous minutes needed before alerting on latency/5xx shape alone
     use_llm: bool = True
 
 
@@ -94,7 +96,8 @@ def load_config(home: Path) -> WatchConfig:
                 interval=parse_duration(w.get("interval", "1m")), lookback=parse_duration(w.get("lookback", "15m")),
                 error_rate=float(th.get("error_rate", 0.05)), p95_multiplier=float(th.get("p95_multiplier", 3.0)),
                 new_signatures=int(th.get("new_signatures", 1)),
-                min_signature_count=int(th.get("min_signature_count", 5)), use_llm=bool(w.get("use_llm", True))))
+                min_signature_count=int(th.get("min_signature_count", 5)),
+                min_bad_minutes=int(th.get("min_bad_minutes", 2)), use_llm=bool(w.get("use_llm", True))))
         return WatchConfig(watches or [Watch()], dict(data.get("alerts") or {}), c)
     return WatchConfig()
 
@@ -115,7 +118,7 @@ def evaluate(store, w: Watch, now_ts: float, tz=None) -> dict:
     new = [s for s in st.signatures if s["new"] and s["count"] >= w.min_signature_count]
     if len(new) >= w.new_signatures and new:
         reasons.append(f"{len(new)} new error signature(s): " + "; ".join(s["sig"][:80] for s in new[:2]))
-    if st.anomaly:
+    if st.anomaly and st.anomaly["bad_minutes"] >= w.min_bad_minutes:
         a = st.anomaly
         since = datetime.fromtimestamp(a["start"], tz).strftime("%H:%M")
         reasons.append(f"{a['bad_minutes']} anomalous minute(s) since {since}, peak p95 {a['peak_p95'] or 0:.0f}ms")
@@ -194,6 +197,9 @@ class Watcher:
         with lock:
             inv = self.det.prepare(w.question, now=datetime.fromtimestamp(end, tz), tr=tr)
         res = self.det.answer(inv, use_llm=w.use_llm)  # LLM only here: flagged + new incident
+        if w.use_llm and res.get("llm_error"):  # one alert = one LLM call; worth one retry on a hiccup
+            time.sleep(3)
+            res = self.det.answer(inv, use_llm=True)
         first = ev["first_ts"] or start
         incident = hashlib.sha1(f"{w.name}|{int(first // 60)}".encode()).hexdigest()[:10]
         f = {"id": uuid.uuid4().hex[:12], "type": "alert", "watch": w.name, "severity": ev["severity"],

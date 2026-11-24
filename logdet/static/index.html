@@ -25,6 +25,14 @@ a.cite{text-decoration:none;cursor:pointer;border-bottom:1px dotted var(--acc)}
 .ev .t{color:var(--ink);font-weight:600}.cursor{display:inline-block;width:8px;height:1em;background:var(--acc);vertical-align:-2px;animation:bl 1s steps(1) infinite;margin-left:2px}
 @keyframes bl{50%{opacity:0}}.status{display:flex;gap:8px;align-items:center}.spin{width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
+.alerts h2{font-size:15px;margin:0 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+.al{border-top:1px solid var(--line);padding:10px 0}.al:first-of-type{border-top:0}
+.sev{display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;color:#fff;text-transform:uppercase;letter-spacing:.04em}
+.sev.critical{background:var(--bad)}.sev.warning{background:#d97706}.sev.resolved{background:#16a34a}
+.tag{font-size:11px;color:var(--mute);border:1px solid var(--line);border-radius:999px;padding:0 6px;margin-left:6px}
+.al .sum{white-space:pre-wrap;margin:6px 0 4px;max-height:7.5em;overflow:hidden}.al.open .sum{max-height:none}
+.al .cl{font:11.5px/1.4 ui-monospace,Menlo,monospace;color:var(--mute);overflow-wrap:anywhere}
+.al button.more{background:none;color:var(--acc);padding:0;font-size:12px}
 </style>
 </head>
 <body>
@@ -33,6 +41,7 @@ a.cite{text-decoration:none;cursor:pointer;border-bottom:1px dotted var(--acc)}
   <p class="sub">Ask your logs why things broke. Runs on a Fly.io Sprite · Pinecone + Gemini via Sprites connectors.</p>
   <form id="f"><input id="q" placeholder="어제 새벽 3시에 왜 느려졌어?  /  Why did checkout slow down at 3am yesterday?" autocomplete="off"><button id="b">Ask</button></form>
   <div class="chips" id="chips"></div>
+  <div class="card alerts" id="alerts"><h2><span>🛎 Watch / Alerts</span><span class="meta" id="watchinfo">loading…</span></h2><div id="alist" class="meta">No alerts yet.</div></div>
   <div id="out"></div>
   <p class="meta" id="health"></p>
 </main>
@@ -89,6 +98,15 @@ function renderMeta(d){const st=d.stats,w=st.window,b=st.baseline,a=st.anomaly;
  <div class="card"><div class="meta">Evidence · click a citation in the answer to jump here</div>${d.evidence.map(e=>`<div class="ev" id="ev-${e.cite}"><b>[${e.cite}]</b> <span class="t">${hms(e.ts)}</span> ${esc(e.source)}:${e.lineno} <span class="why">· ${esc(e.why)}</span><br>${esc(e.line)}</div>`).join("")}</div>`}
 function renderAnswer(text,live){$("#ans").innerHTML=md(text)+(live?'<span class="cursor"></span>':"")}
 function renderDone(d,ttfb){$("#ansmeta").innerHTML=`llm: ${esc(d.llm)} · vector: ${esc(d.vector)} · embed: ${esc(d.embed)} · ${d.elapsed_ms} ms${ttfb?` (stats in ${ttfb} ms)`:""}${d.cached?" · cached":""}${d.llm_fallback?` · <span class="err">LLM unavailable, rule-based answer</span>`:""}${d.retrieval_fallback?` · <span class="err">vector store unavailable, local re-ranking</span>`:""}`}
+// Watch / Alerts panel: findings from `logdet watch` (deduplicated incidents), refreshed while visible
+function renderAlerts(d){const ws=d.watches||[];$("#watchinfo").textContent=ws.length?ws.map(w=>`${w.name} · every ${w.interval}s · last ${Math.round(w.lookback/60)} min`).join(" | "):"";
+ const fs=d.findings||[];if(!fs.length){$("#alist").innerHTML='<span class="meta">No alerts yet. The watcher only calls the LLM when the stats flag something.</span>';return}
+ $("#alist").innerHTML=fs.slice(0,8).map(f=>{const when=hms(f.at).slice(0,5),day=f.at?new Date(f.at*1000).toLocaleDateString("en-CA",{timeZone:TZ}):"";
+  const cl=(f.evidence||[]).slice(0,3).map(e=>`<div class="cl">[${esc(e.cite)}] ${esc(e.source)}:${e.lineno} ${esc((e.line||"").slice(0,160))}</div>`).join("");
+  return `<div class="al" id="al-${esc(f.id)}"><span class="sev ${esc(f.severity)}">${esc(f.severity)}</span> <b>${esc(f.watch)}</b> <span class="meta">${day} ${when}</span>${f.replay?'<span class="tag">replay · simulated clock</span>':""}${f.llm?`<span class="tag">${esc(f.llm.split(":")[0])}</span>`:""}
+   <div class="meta">${esc((f.reasons||[]).join(" · "))}</div>${f.type==="alert"?`<div class="sum">${md(f.summary||"")}</div>${cl}<button class="more" type="button" onclick="this.parentElement.classList.toggle('open')">more / less</button>`:""}</div>`}).join("")}
+async function loadAlerts(){try{const r=await wakeFetch("api/alerts",{},{quiet:true,budgetMs:30000});renderAlerts(await r.json())}catch{}}
+loadAlerts();setInterval(()=>{if(!document.hidden)loadAlerts()},20000);
 async function ask(){const q=$("#q").value.trim();if(!q)return;$("#b").disabled=true;const t0=performance.now();
  $("#out").innerHTML=`<div class="card meta status"><span class="spin"></span> Investigating… computing baseline stats and searching Pinecone</div>`;
  try{const r=await wakeFetch("api/ask/stream",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q})},{attemptMs:30000});lastSeen=Date.now();
