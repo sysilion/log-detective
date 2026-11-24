@@ -89,14 +89,7 @@ class Detective:
             self.store.add_events(events)
             chunks = build_chunks(events, self.cfg.window_seconds)
             self.store.add_chunks(chunks)
-            vectors = []
-            for i in range(0, len(chunks), 96):
-                batch = chunks[i:i + 96]
-                for c, v in zip(batch, self.emb.embed([c.text for c in batch], "passage")):
-                    vectors.append({"id": c.id, "values": v, "metadata": {
-                        "source": c.source, "ts_start": c.ts_start, "ts_end": c.ts_end,
-                        "n_errors": c.n_errors, "text": c.text[:3500]}})
-            self.vs.upsert(vectors)
+            self.upsert_chunks(chunks)
             total_ev += len(events)
             total_ch += len(chunks)
             log(f"  {source}: {len(events)} events -> {len(chunks)} chunks")
@@ -116,6 +109,18 @@ class Detective:
                 log(f"retention prune failed: {str(e)[:160]}")
         return {"events": total_ev, "chunks": total_ch, "vector": self.vs.name, "embed": self.emb.name,
                 "seconds": round(time.time() - t0, 2), "pruned": pruned}
+
+    def upsert_chunks(self, chunks) -> None:
+        """Embed chunk texts in batches and upsert them (deterministic ids overwrite open windows)."""
+        vectors = []
+        for i in range(0, len(chunks), 96):
+            batch = chunks[i:i + 96]
+            for c, v in zip(batch, self.emb.embed([c.text for c in batch], "passage")):
+                vectors.append({"id": c.id, "values": v, "metadata": {
+                    "source": c.source, "ts_start": c.ts_start, "ts_end": c.ts_end,
+                    "n_errors": c.n_errors, "text": c.text[:3500]}})
+        if vectors:
+            self.vs.upsert(vectors)
 
     # ------------------------------------------------------------ retention
     def prune(self, days: float | None = None, dry_run: bool = False, now: datetime | None = None) -> dict:

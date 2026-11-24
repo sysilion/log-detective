@@ -16,6 +16,15 @@ def _now(cfg: Config, s: str | None) -> datetime | None:
 
 def cmd_ingest(args, cfg):
     from .agent import Detective
+    if args.follow_state:
+        from .ingest import follow_files
+        det = Detective(cfg)
+        res = follow_files(det, args.paths)
+        pruned = det.prune() if cfg.retention_days else None
+        print(f"incremental: +{res['events']} new events from {res['files']} file(s), "
+              f"{res['chunks']} windows upserted" + (f"; pruned {pruned['events']} old events" if pruned and
+                                                       pruned["events"] else ""))
+        return
     print(f"ingesting {', '.join(args.paths)} ...")
     res = Detective(cfg).ingest(args.paths, reset=args.reset)
     print(f"done: {res['events']} events, {res['chunks']} chunks -> vector={res['vector']} "
@@ -67,6 +76,13 @@ def cmd_demo(args, cfg):
     args.paths, args.reset = [args.out], True
     cmd_ingest(args, cfg)
     print('\nnow try:  logdet ask "어제 새벽 3시에 왜 느려졌어?"')
+
+
+def cmd_tail(args, cfg):
+    from .agent import Detective
+    from .ingest import tail
+    print(f"tailing {', '.join(args.paths)} (flush every {cfg.flush_seconds:g}s, Ctrl-C to stop)", flush=True)
+    tail(Detective(cfg), args.paths, cfg.flush_seconds, log=lambda m: print(m, flush=True))
 
 
 def cmd_prune(args, cfg):
@@ -130,7 +146,13 @@ def main(argv=None):
     p = sub.add_parser("ingest", help="parse, chunk, embed and index log files/dirs")
     p.add_argument("paths", nargs="+")
     p.add_argument("--reset", action="store_true", help="clear local store and vector namespace first")
+    p.add_argument("--follow-state", action="store_true",
+                   help="incremental: read only lines appended since the last run (checkpoints in LOGDET_HOME)")
     p.set_defaults(fn=cmd_ingest)
+
+    p = sub.add_parser("tail", help="watch files and ingest new lines every LOGDET_FLUSH_SECONDS (Sprite service)")
+    p.add_argument("paths", nargs="+")
+    p.set_defaults(fn=cmd_tail)
 
     p = sub.add_parser("ask", help="ask a question in natural language")
     p.add_argument("question")

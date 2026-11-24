@@ -96,6 +96,18 @@ class Store:
             self.db.commit()
         return ev, ch
 
+    def events_for(self, source: str, start: float, end: float) -> list[Event]:
+        """Events of one source in [start, end) as Event objects (used to rebuild a touched window)."""
+        rows = self.db.execute(
+            "SELECT source, lineno, ts, level, msg, raw, status, latency_ms, path, service FROM events "
+            "WHERE source=? AND ts>=? AND ts<? ORDER BY ts, lineno", (source, start, end)).fetchall()
+        return [Event(r["source"], r["lineno"], r["ts"], r["level"], r["msg"], r["raw"], r["status"],
+                      r["latency_ms"], r["path"], r["service"]) for r in rows]
+
+    def max_lineno(self, source: str) -> int:
+        r = self.db.execute("SELECT MAX(lineno) FROM events WHERE source=?", (source,)).fetchone()
+        return int(r[0] or 0)
+
     def chunks_between(self, start: float, end: float) -> list[Chunk]:
         rows = self.db.execute("SELECT * FROM chunks WHERE ts_start < ? AND ts_end > ? ORDER BY ts_start",
                                (end, start)).fetchall()

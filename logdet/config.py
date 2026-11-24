@@ -64,6 +64,9 @@ class Config:
     # chunking
     window_seconds: int = field(default_factory=lambda: int(_env("LOGDET_WINDOW", "120")))
 
+    # continuous ingestion
+    flush_seconds: float = field(default_factory=lambda: float(_env("LOGDET_FLUSH_SECONDS", "30")))
+
     # data retention: events, chunks and vectors whose window ended before now - N days are pruned (0 = forever)
     retention_days: float = field(default_factory=lambda: float(_env("LOGDET_RETENTION_DAYS", "30")))
 
