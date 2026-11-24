@@ -20,6 +20,11 @@ button{font:inherit;padding:0 18px;border:0;border-radius:10px;background:var(--
 .ev{font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;border-top:1px solid var(--line);padding:6px 0;overflow-wrap:anywhere}
 .ev b{color:var(--acc)}.why{color:var(--mute)}svg{width:100%;height:120px;display:block}
 .err{color:var(--bad)}
+a.cite{text-decoration:none;cursor:pointer;border-bottom:1px dotted var(--acc)}
+.ev{scroll-margin-top:90px;transition:background .3s}.ev.hl{background:color-mix(in srgb,var(--acc) 18%,transparent);border-radius:6px}
+.ev .t{color:var(--ink);font-weight:600}.cursor{display:inline-block;width:8px;height:1em;background:var(--acc);vertical-align:-2px;animation:bl 1s steps(1) infinite;margin-left:2px}
+@keyframes bl{50%{opacity:0}}.status{display:flex;gap:8px;align-items:center}.spin{width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -34,26 +39,41 @@ button{font:inherit;padding:0 18px;border:0;border-radius:10px;background:var(--
 <script>
 const EX=["어제 새벽 3시에 왜 느려졌어?","Why did checkout slow down at 3am yesterday?","어제 새벽 1시 반쯤 결제 경고는 뭐였어?","What happened yesterday?"];
 const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+// markdown-lite on escaped text; each [E#] becomes a link that jumps to its evidence line
 const md=t=>esc(t).replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>")
- .replace(/\[(E\d+(?:\s*[,\-–]\s*E\d+)*)\]/g,'<span class="cite">[$1]</span>');
+ .replace(/\[(E\d+(?:\s*[,\-–]\s*E\d+)*)\]/g,(m,ids)=>"["+ids.replace(/E\d+/g,id=>`<a class="cite" href="#ev-${id}" data-e="${id}">${id}</a>`)+"]");
+let TZ;
+const hms=ts=>ts?new Date(ts*1000).toLocaleTimeString("en-GB",{hour12:false,timeZone:TZ}):"";
+document.addEventListener("click",e=>{const a=e.target.closest("a.cite");if(!a)return;e.preventDefault();
+ const row=document.getElementById("ev-"+a.dataset.e);if(!row)return;row.scrollIntoView({behavior:"smooth",block:"center"});
+ row.classList.add("hl");setTimeout(()=>row.classList.remove("hl"),2200)});
 const ms=v=>v==null?"–":v>=1000?(v/1000).toFixed(1)+"s":Math.round(v)+"ms";
 EX.forEach(e=>{const c=document.createElement("button");c.type="button";c.className="chip";c.textContent=e;c.onclick=()=>{$("#q").value=e;ask()};$("#chips").append(c)});
-fetch("api/health").then(r=>r.json()).then(h=>{$("#health").textContent=`${h.events} events · ${h.chunks} chunks indexed · tz ${h.tz}`+(h.range?` · ${h.range[0].slice(0,16)} → ${h.range[1].slice(0,16)}`:"")+(h.now?` · demo clock pinned to ${h.now.slice(0,16)} (so "yesterday" = the sample incident day)`:"")}).catch(()=>{});
+fetch("api/health").then(r=>r.json()).then(h=>{TZ=h.tz;$("#health").textContent=`${h.events} events · ${h.chunks} chunks indexed · tz ${h.tz}`+(h.range?` · ${h.range[0].slice(0,16)} → ${h.range[1].slice(0,16)}`:"")+(h.now?` · demo clock pinned to ${h.now.slice(0,16)} (so "yesterday" = the sample incident day)`:"")}).catch(()=>{});
 $("#f").onsubmit=e=>{e.preventDefault();ask()};
 function chart(st){const tl=st.timeline;if(!tl.length)return"";const W=900,H=120,mx=Math.max(...tl.map(m=>m.p95||0))||1,bw=W/tl.length,a=st.anomaly;
  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="p95 latency per minute">`;
  if(a){const i0=tl.findIndex(m=>m.t>=a.start),i1=tl.findIndex(m=>m.t>=a.end);s+=`<rect x="${i0*bw}" y="0" width="${((i1<0?tl.length:i1)-i0)*bw}" height="${H}" fill="var(--bad)" opacity=".10"/>`}
  tl.forEach((m,i)=>{const h=(m.p95||0)/mx*(H-6);s+=`<rect x="${i*bw+.5}" y="${H-h}" width="${Math.max(bw-1,1)}" height="${h}" fill="${m.err?'var(--bad)':'var(--bar)'}"><title>${new Date(m.t*1000).toLocaleTimeString()} p95 ${ms(m.p95)} · ${m.err}/${m.n} 5xx</title></rect>`});
  return s+"</svg>"}
-async function ask(){const q=$("#q").value.trim();if(!q)return;$("#b").disabled=true;$("#out").innerHTML=`<div class="card meta">Investigating… (stats → Pinecone retrieval → Ollama)</div>`;
- try{const r=await fetch("api/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q})});const d=await r.json();if(d.error)throw new Error(d.error);
-  const st=d.stats,w=st.window,b=st.baseline,a=st.anomaly;
-  const tiles=[["p95 latency",ms(w.p95),"baseline "+ms(b.p95)],["peak p95",a?ms(a.peak_p95):"–",a?"at "+new Date(a.peak*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"no anomaly"],["5xx rate",(w.error_rate*100).toFixed(1)+"%","baseline "+(b.error_rate*100).toFixed(1)+"%"],["requests",w.requests,w.lines+" log lines"]];
-  $("#out").innerHTML=`<div class="tiles">${tiles.map(t=>`<div class="card tile"><div class="k">${t[0]}</div><div class="v">${esc(t[1])}</div><div class="k">${esc(t[2])}</div></div>`).join("")}</div>
-  <div class="card"><div class="meta">p95 latency per minute · ${esc(d.range.label)}</div>${chart(st)}</div>
-  <div class="card"><div class="answer">${md(d.answer)}</div>
-  <p class="meta">llm: ${esc(d.llm)} · vector: ${esc(d.vector)} · embed: ${esc(d.embed)} · ${d.elapsed_ms} ms${d.llm_fallback?` · <span class="err">LLM unavailable, rule-based answer</span>`:""}</p></div>
-  <div class="card"><div class="meta">Evidence</div>${d.evidence.map(e=>`<div class="ev"><b>[${e.cite}]</b> ${esc(e.source)}:${e.lineno} <span class="why">· ${esc(e.why)}</span><br>${esc(e.line)}</div>`).join("")}</div>`;
+function renderMeta(d){const st=d.stats,w=st.window,b=st.baseline,a=st.anomaly;
+ const tiles=[["p95 latency",ms(w.p95),"baseline "+ms(b.p95)],["peak p95",a?ms(a.peak_p95):"–",a?"at "+hms(a.peak).slice(0,5):"no anomaly"],["5xx rate",(w.error_rate*100).toFixed(1)+"%","baseline "+(b.error_rate*100).toFixed(1)+"%"],["requests",w.requests,w.lines+" log lines"]];
+ $("#out").innerHTML=`<div class="tiles">${tiles.map(t=>`<div class="card tile"><div class="k">${t[0]}</div><div class="v">${esc(t[1])}</div><div class="k">${esc(t[2])}</div></div>`).join("")}</div>
+ <div class="card"><div class="meta">p95 latency per minute · ${esc(d.range.label)}${a?` · anomaly ${hms(a.start).slice(0,5)}–${hms(a.end).slice(0,5)}`:""}</div>${chart(st)}</div>
+ <div class="card"><div class="answer" id="ans"></div><p class="meta" id="ansmeta"><span class="status"><span class="spin"></span> Gemini is writing a root-cause hypothesis from ${d.evidence.length} evidence lines…</span></p></div>
+ <div class="card"><div class="meta">Evidence · click a citation in the answer to jump here</div>${d.evidence.map(e=>`<div class="ev" id="ev-${e.cite}"><b>[${e.cite}]</b> <span class="t">${hms(e.ts)}</span> ${esc(e.source)}:${e.lineno} <span class="why">· ${esc(e.why)}</span><br>${esc(e.line)}</div>`).join("")}</div>`}
+function renderAnswer(text,live){$("#ans").innerHTML=md(text)+(live?'<span class="cursor"></span>':"")}
+function renderDone(d,ttfb){$("#ansmeta").innerHTML=`llm: ${esc(d.llm)} · vector: ${esc(d.vector)} · embed: ${esc(d.embed)} · ${d.elapsed_ms} ms${ttfb?` (stats in ${ttfb} ms)`:""}${d.cached?" · cached":""}${d.llm_fallback?` · <span class="err">LLM unavailable, rule-based answer</span>`:""}${d.retrieval_fallback?` · <span class="err">vector store unavailable, local re-ranking</span>`:""}`}
+async function ask(){const q=$("#q").value.trim();if(!q)return;$("#b").disabled=true;const t0=performance.now();
+ $("#out").innerHTML=`<div class="card meta status"><span class="spin"></span> Investigating… computing baseline stats and searching Pinecone</div>`;
+ try{const r=await fetch("api/ask/stream",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q})});
+  if(!r.ok){let m="HTTP "+r.status;try{m=(await r.json()).error||m}catch{}throw new Error(m)}
+  const rd=r.body.getReader(),dec=new TextDecoder();let buf="",text="",ttfb=0;
+  for(;;){const {done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
+   while((i=buf.indexOf("\n"))>=0){const line=buf.slice(0,i);buf=buf.slice(i+1);if(!line.trim())continue;const ev=JSON.parse(line);
+    if(ev.type==="meta"){ttfb=Math.round(performance.now()-t0);renderMeta(ev)}
+    else if(ev.type==="delta"){text+=ev.text;renderAnswer(text,true)}
+    else if(ev.type==="done"){renderAnswer(ev.answer,false);renderDone(ev,ttfb)}}}
  }catch(e){$("#out").innerHTML=`<div class="card err">${esc(e.message)}</div>`}finally{$("#b").disabled=false}}
 </script>
 </body>
