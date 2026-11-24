@@ -42,7 +42,7 @@ const SCENES = [
     "From the command line, ingest your logs.",
     "They're parsed, chunked into two-minute windows, and embedded into Pinecone.",
     "Then ask, in plain English."] },
-  { id: "ui1", type: "ui", badge: true, q: "Why did checkout slow down at 3am yesterday?", lines: [
+  { id: "ui1", type: "ui", badge: true, q: "Why did checkout slow down at 3 AM yesterday?", lines: [
     "Same question in the web UI.",
     "It compares latency and errors against a baseline,",
     "pulls the matching log chunks from Pinecone, and asks Gemini for a root cause.",
@@ -51,7 +51,7 @@ const SCENES = [
     ["The trigger: a nightly report job that started at 2:57 and exhausted the shared database connection pool.",
      "The trigger: a nightly report job that started at 2 57, and exhausted the shared database connection pool."],
     "Every claim cites the exact log lines."] },
-  { id: "ui2", type: "ui", badge: true, q: "What were the payment warnings around 1:30am yesterday?", lines: [
+  { id: "ui2", type: "ui", badge: true, q: "What were the payment warnings around 1:30 AM yesterday?", lines: [
     "And it doesn't chase red herrings:",
     ["the payment warnings at 1:30 had no real impact.", "the payment warnings at one thirty had no real impact."]] },
   { id: "arch", type: "card", lines: [
@@ -158,12 +158,20 @@ async function record(browser, scene, narr, termSteps) {
     await sleep(350);
     await page.click("#b");
     await page.waitForSelector(".answer", { timeout: 90000 });
-    const toEvidence = scene.id === "ui1" ? 9000 : 1800;
-    await sleep(scene.id === "ui1" ? 2600 : 600);
+    // wait until the streamed answer is complete (meta line shows the model)
+    await page.waitForFunction(() => (document.querySelector("#ansmeta, .answer + .meta")?.textContent || "").includes("llm:"),
+      null, { timeout: 90000 });
+    await sleep(scene.id === "ui1" ? 1800 : 500);
     await page.evaluate(() => window.scrollTo({ top: document.querySelector(".answer").getBoundingClientRect().top
       + window.scrollY - 140, behavior: "smooth" }));
-    await sleep(toEvidence);
-    await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }));
+    if (scene.id === "ui1") {
+      await sleep(8500);
+      const cite = await page.$('a.cite[data-e="E1"]') || await page.$("a.cite");
+      if (cite) await cite.click();  // jumps to the cited evidence line and highlights it
+      else await page.evaluate(() => window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }));
+    } else {
+      await sleep(1800);
+    }
   })();
   const minEnd = narr.audio + 0.6;
   await Promise.all([action, sleep(minEnd * 1000)]);
