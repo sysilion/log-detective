@@ -21,6 +21,12 @@ LOG_SUFFIXES = {".log", ".jsonl", ".json", ".txt", ".ndjson", ""}
 _CITE_LINE_RE = re.compile(r"^\[([^\]:]+):(\d+)\] (.*)$")
 _INTERESTING_RE = re.compile(r"ERROR|FATAL|WARN|timeout|timed out|exhaust|refused|duration: \d{4,}|\" 5\d\d ", re.I)
 RULE_BASED = "rule-based (no LLM)"
+# models sometimes cite prompt section names ("[change events]") instead of E-numbers; drop those
+_BAD_CITE_RE = re.compile(r"\s*\[(?:change[ _-]?events?|evidence(?: log lines)?|anomaly|baseline|window)\]", re.I)
+
+
+def clean_answer(text: str) -> str:
+    return _BAD_CITE_RE.sub("", text).strip()
 
 
 @dataclass
@@ -164,7 +170,7 @@ class Detective:
             "question": inv.question,
             "range": {"start": tr.start.isoformat(), "end": tr.end.isoformat(), "label": tr.label,
                       "explicit": tr.explicit},
-            "answer": answer, "llm": llm_name, "llm_error": llm_error, "retrieval_error": inv.retrieval_error,
+            "answer": clean_answer(answer), "llm": llm_name, "llm_error": llm_error, "retrieval_error": inv.retrieval_error,
             "vector": self.vs.name, "embed": self.emb.name,
             "stats": inv.stats.to_dict(), "evidence": inv.evidence,
             "retrieved": [{"id": h["id"], "score": round(h["score"], 3), "source": h["metadata"].get("source"),

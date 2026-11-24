@@ -71,3 +71,8 @@ def test_pinned_demo_clock(det):
         assert res["range"]["label"] == "2026-11-23 03:00" and res["stats"]["anomaly"]
     finally:
         det.cfg.now_override = ""
+
+
+def test_clean_answer_drops_section_name_citations():
+    from logdet.agent import clean_answer
+    assert clean_answer("job finished [change events]. pool [E1] ok [CHANGE EVENTS]") == "job finished. pool [E1] ok"
