@@ -1,0 +1,223 @@
+2026-11-23 00:00:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 238 buffers (0.7%); write=16.166 s
+2026-11-23 00:05:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 832 buffers (1.2%); write=13.866 s
+2026-11-23 00:10:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 665 buffers (0.9%); write=1.834 s
+2026-11-23 00:15:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 131 buffers (0.8%); write=21.174 s
+2026-11-23 00:20:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 216 buffers (0.3%); write=3.869 s
+2026-11-23 00:25:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 894 buffers (0.7%); write=4.776 s
+2026-11-23 00:30:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 688 buffers (0.1%); write=23.609 s
+2026-11-23 00:35:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 748 buffers (0.3%); write=1.516 s
+2026-11-23 00:40:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 272 buffers (0.8%); write=26.813 s
+2026-11-23 00:45:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 578 buffers (1.4%); write=3.722 s
+2026-11-23 00:50:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 537 buffers (1.5%); write=23.697 s
+2026-11-23 00:55:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 539 buffers (1.1%); write=24.067 s
+2026-11-23 01:00:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 161 buffers (1.2%); write=5.638 s
+2026-11-23 01:05:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 496 buffers (0.6%); write=9.466 s
+2026-11-23 01:10:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 587 buffers (1.3%); write=18.924 s
+2026-11-23 01:15:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 628 buffers (1.0%); write=24.204 s
+2026-11-23 01:20:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 583 buffers (0.5%); write=4.981 s
+2026-11-23 01:25:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 803 buffers (1.3%); write=16.223 s
+2026-11-23 01:30:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 269 buffers (0.4%); write=15.011 s
+2026-11-23 01:35:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 717 buffers (1.5%); write=18.031 s
+2026-11-23 01:40:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 489 buffers (1.3%); write=3.023 s
+2026-11-23 01:45:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 164 buffers (1.2%); write=27.480 s
+2026-11-23 01:50:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 644 buffers (1.1%); write=21.167 s
+2026-11-23 01:55:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 257 buffers (1.3%); write=3.839 s
+2026-11-23 02:00:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 775 buffers (0.9%); write=21.085 s
+2026-11-23 02:05:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 117 buffers (0.8%); write=10.066 s
+2026-11-23 02:10:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 593 buffers (1.1%); write=15.050 s
+2026-11-23 02:15:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 479 buffers (1.2%); write=1.507 s
+2026-11-23 02:20:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 325 buffers (0.5%); write=26.255 s
+2026-11-23 02:25:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 872 buffers (0.3%); write=27.101 s
+2026-11-23 02:30:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 237 buffers (0.2%); write=12.923 s
+2026-11-23 02:35:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 480 buffers (1.0%); write=25.952 s
+2026-11-23 02:40:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 575 buffers (0.9%); write=27.140 s
+2026-11-23 02:45:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 115 buffers (0.9%); write=15.547 s
+2026-11-23 02:50:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 294 buffers (0.8%); write=19.984 s
+2026-11-23 02:55:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 457 buffers (1.4%); write=10.815 s
+2026-11-23 02:57:03.018 +09:00 [4100] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.054 +09:00 [4101] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.080 +09:00 [4102] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.148 +09:00 [4103] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.185 +09:00 [4104] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.230 +09:00 [4105] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.267 +09:00 [4106] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.281 +09:00 [4107] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.332 +09:00 [4108] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.365 +09:00 [4109] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.402 +09:00 [4110] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.460 +09:00 [4111] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.508 +09:00 [4112] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.538 +09:00 [4113] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.572 +09:00 [4114] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.603 +09:00 [4115] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.655 +09:00 [4116] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.703 +09:00 [4117] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.747 +09:00 [4118] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.771 +09:00 [4119] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.819 +09:00 [4120] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.848 +09:00 [4121] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.904 +09:00 [4122] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.938 +09:00 [4123] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:03.963 +09:00 [4124] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.024 +09:00 [4125] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.063 +09:00 [4126] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.088 +09:00 [4127] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.149 +09:00 [4128] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.165 +09:00 [4129] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.227 +09:00 [4130] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.258 +09:00 [4131] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.307 +09:00 [4132] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.350 +09:00 [4133] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.381 +09:00 [4134] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.429 +09:00 [4135] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.455 +09:00 [4136] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.486 +09:00 [4137] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.523 +09:00 [4138] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.566 +09:00 [4139] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.629 +09:00 [4140] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.650 +09:00 [4141] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.707 +09:00 [4142] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.747 +09:00 [4143] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.760 +09:00 [4144] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.828 +09:00 [4145] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.841 +09:00 [4146] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:57:04.899 +09:00 [4147] LOG:  connection authorized: user=report_ro database=shop application_name=nightly_sales_report
+2026-11-23 02:59:36.774 +09:00 [4128] LOG:  duration: 53005.793 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:00:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 841 buffers (0.2%); write=28.747 s
+2026-11-23 03:00:10.491 +09:00 [4105] LOG:  duration: 44451.482 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:00:45.782 +09:00 [4113] LOG:  duration: 51825.806 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:01:20.142 +09:00 [4136] LOG:  duration: 51032.146 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:01:36.484 +09:00 [4103] LOG:  duration: 44830.350 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:02:05.282 +09:00 [4126] LOG:  duration: 43673.324 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:02:20.737 +09:00 [4111] LOG:  duration: 58499.227 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:02:58.907 +09:00 [4120] LOG:  duration: 40494.080 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:03:17.931 +09:00 [4129] LOG:  duration: 42847.053 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:03:32.988 +09:00 [4106] LOG:  duration: 40147.176 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:04:12.645 +09:00 [4118] LOG:  duration: 43712.357 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:04:38.699 +09:00 [4113] LOG:  duration: 54171.807 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:04:53.919 +09:00 [4114] LOG:  duration: 60862.818 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:05:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 746 buffers (0.8%); write=21.488 s
+2026-11-23 03:05:31.832 +09:00 [4119] LOG:  duration: 46990.849 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:05:49.021 +09:00 [4103] LOG:  duration: 47466.472 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:06:26.601 +09:00 [4126] LOG:  duration: 56550.352 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:07:05.198 +09:00 [4142] LOG:  duration: 55206.117 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:07:24.631 +09:00 [4133] LOG:  duration: 43247.100 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:07:41.454 +09:00 [4110] LOG:  duration: 49308.507 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:07:59.908 +09:00 [4134] LOG:  duration: 53236.906 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:08:30.193 +09:00 [4142] LOG:  duration: 56865.889 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:08:56.613 +09:00 [4143] LOG:  duration: 57411.649 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:09:23.183 +09:00 [4134] LOG:  duration: 47955.722 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:09:45.294 +09:00 [4132] LOG:  duration: 51054.509 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:10:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 746 buffers (0.8%); write=15.776 s
+2026-11-23 03:10:16.268 +09:00 [4140] LOG:  duration: 40934.838 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:10:39.473 +09:00 [4143] LOG:  duration: 48524.064 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:11:03.467 +09:00 [4135] LOG:  duration: 56267.100 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:11:42.062 +09:00 [4123] LOG:  duration: 55447.582 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:11:59.072 +09:00 [4147] LOG:  duration: 47039.371 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:12:22.199 +09:00 [4139] LOG:  duration: 51165.471 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:12:47.435 +09:00 [4114] LOG:  duration: 47687.608 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:13:05.098 +09:00 [4105] LOG:  duration: 52675.240 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:13:43.340 +09:00 [4124] LOG:  duration: 55089.430 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:14:12.246 +09:00 [4140] LOG:  duration: 52777.486 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:14:46.717 +09:00 [4131] LOG:  duration: 53687.914 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:15:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 778 buffers (0.7%); write=26.645 s
+2026-11-23 03:15:21.476 +09:00 [4145] LOG:  duration: 49010.217 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:15:40.067 +09:00 [4120] LOG:  duration: 47218.220 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:15:57.478 +09:00 [4101] LOG:  duration: 53389.266 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:16:37.416 +09:00 [4142] LOG:  duration: 51643.261 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:17:07.641 +09:00 [4126] LOG:  duration: 60126.356 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:17:30.935 +09:00 [4117] LOG:  duration: 41195.857 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:17:49.904 +09:00 [4135] LOG:  duration: 46161.986 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:18:07.565 +09:00 [4107] LOG:  duration: 46693.279 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:18:37.414 +09:00 [4128] LOG:  duration: 45217.201 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:19:14.631 +09:00 [4101] LOG:  duration: 47531.649 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:19:35.172 +09:00 [4104] LOG:  duration: 45786.775 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:20:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 844 buffers (1.5%); write=9.256 s
+2026-11-23 03:20:10.813 +09:00 [4133] LOG:  duration: 53686.538 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:20:45.931 +09:00 [4112] LOG:  duration: 53661.424 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:21:17.332 +09:00 [4147] LOG:  duration: 53708.353 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:21:52.324 +09:00 [4147] LOG:  duration: 40064.980 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:22:13.965 +09:00 [4127] LOG:  duration: 46953.374 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:22:39.398 +09:00 [4141] LOG:  duration: 49435.974 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:23:06.771 +09:00 [4133] LOG:  duration: 43775.520 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:23:43.184 +09:00 [4129] LOG:  duration: 60799.771 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:24:10.000 +09:00 [4100] LOG:  disconnection: session time: 0:27:07.775 user=report_ro database=shop
+2026-11-23 03:24:10.030 +09:00 [4101] LOG:  disconnection: session time: 0:27:07.468 user=report_ro database=shop
+2026-11-23 03:24:10.060 +09:00 [4102] LOG:  disconnection: session time: 0:27:07.333 user=report_ro database=shop
+2026-11-23 03:24:10.090 +09:00 [4103] LOG:  disconnection: session time: 0:27:07.383 user=report_ro database=shop
+2026-11-23 03:24:10.120 +09:00 [4104] LOG:  disconnection: session time: 0:27:07.040 user=report_ro database=shop
+2026-11-23 03:24:10.150 +09:00 [4105] LOG:  disconnection: session time: 0:27:07.851 user=report_ro database=shop
+2026-11-23 03:24:10.180 +09:00 [4106] LOG:  disconnection: session time: 0:27:07.350 user=report_ro database=shop
+2026-11-23 03:24:10.210 +09:00 [4107] LOG:  disconnection: session time: 0:27:07.697 user=report_ro database=shop
+2026-11-23 03:24:10.240 +09:00 [4108] LOG:  disconnection: session time: 0:27:07.897 user=report_ro database=shop
+2026-11-23 03:24:10.270 +09:00 [4109] LOG:  disconnection: session time: 0:27:07.592 user=report_ro database=shop
+2026-11-23 03:24:10.300 +09:00 [4110] LOG:  disconnection: session time: 0:27:07.969 user=report_ro database=shop
+2026-11-23 03:24:10.330 +09:00 [4111] LOG:  disconnection: session time: 0:27:07.210 user=report_ro database=shop
+2026-11-23 03:24:10.360 +09:00 [4112] LOG:  disconnection: session time: 0:27:07.952 user=report_ro database=shop
+2026-11-23 03:24:10.390 +09:00 [4113] LOG:  disconnection: session time: 0:27:07.369 user=report_ro database=shop
+2026-11-23 03:24:10.420 +09:00 [4114] LOG:  disconnection: session time: 0:27:07.940 user=report_ro database=shop
+2026-11-23 03:24:10.450 +09:00 [4115] LOG:  disconnection: session time: 0:27:07.566 user=report_ro database=shop
+2026-11-23 03:24:10.480 +09:00 [4116] LOG:  disconnection: session time: 0:27:07.143 user=report_ro database=shop
+2026-11-23 03:24:10.510 +09:00 [4117] LOG:  disconnection: session time: 0:27:07.192 user=report_ro database=shop
+2026-11-23 03:24:10.540 +09:00 [4118] LOG:  disconnection: session time: 0:27:07.493 user=report_ro database=shop
+2026-11-23 03:24:10.570 +09:00 [4119] LOG:  disconnection: session time: 0:27:07.620 user=report_ro database=shop
+2026-11-23 03:24:10.600 +09:00 [4120] LOG:  disconnection: session time: 0:27:07.593 user=report_ro database=shop
+2026-11-23 03:24:10.630 +09:00 [4121] LOG:  disconnection: session time: 0:27:07.375 user=report_ro database=shop
+2026-11-23 03:24:10.660 +09:00 [4122] LOG:  disconnection: session time: 0:27:07.499 user=report_ro database=shop
+2026-11-23 03:24:10.690 +09:00 [4123] LOG:  disconnection: session time: 0:27:07.006 user=report_ro database=shop
+2026-11-23 03:24:10.720 +09:00 [4124] LOG:  disconnection: session time: 0:27:07.016 user=report_ro database=shop
+2026-11-23 03:24:10.750 +09:00 [4125] LOG:  disconnection: session time: 0:27:07.601 user=report_ro database=shop
+2026-11-23 03:24:10.780 +09:00 [4126] LOG:  disconnection: session time: 0:27:07.507 user=report_ro database=shop
+2026-11-23 03:24:10.810 +09:00 [4127] LOG:  disconnection: session time: 0:27:07.039 user=report_ro database=shop
+2026-11-23 03:24:10.840 +09:00 [4128] LOG:  disconnection: session time: 0:27:07.949 user=report_ro database=shop
+2026-11-23 03:24:10.870 +09:00 [4129] LOG:  disconnection: session time: 0:27:07.035 user=report_ro database=shop
+2026-11-23 03:24:10.900 +09:00 [4130] LOG:  disconnection: session time: 0:27:07.883 user=report_ro database=shop
+2026-11-23 03:24:10.930 +09:00 [4131] LOG:  disconnection: session time: 0:27:07.531 user=report_ro database=shop
+2026-11-23 03:24:10.960 +09:00 [4132] LOG:  disconnection: session time: 0:27:07.222 user=report_ro database=shop
+2026-11-23 03:24:10.990 +09:00 [4133] LOG:  disconnection: session time: 0:27:07.462 user=report_ro database=shop
+2026-11-23 03:24:11.020 +09:00 [4134] LOG:  disconnection: session time: 0:27:07.084 user=report_ro database=shop
+2026-11-23 03:24:11.050 +09:00 [4135] LOG:  disconnection: session time: 0:27:07.552 user=report_ro database=shop
+2026-11-23 03:24:11.080 +09:00 [4136] LOG:  disconnection: session time: 0:27:07.289 user=report_ro database=shop
+2026-11-23 03:24:11.110 +09:00 [4137] LOG:  disconnection: session time: 0:27:07.746 user=report_ro database=shop
+2026-11-23 03:24:11.140 +09:00 [4138] LOG:  disconnection: session time: 0:27:07.852 user=report_ro database=shop
+2026-11-23 03:24:11.170 +09:00 [4139] LOG:  disconnection: session time: 0:27:07.392 user=report_ro database=shop
+2026-11-23 03:24:11.200 +09:00 [4140] LOG:  disconnection: session time: 0:27:07.484 user=report_ro database=shop
+2026-11-23 03:24:11.230 +09:00 [4141] LOG:  disconnection: session time: 0:27:07.830 user=report_ro database=shop
+2026-11-23 03:24:11.260 +09:00 [4142] LOG:  disconnection: session time: 0:27:07.152 user=report_ro database=shop
+2026-11-23 03:24:11.290 +09:00 [4143] LOG:  disconnection: session time: 0:27:07.008 user=report_ro database=shop
+2026-11-23 03:24:11.320 +09:00 [4144] LOG:  disconnection: session time: 0:27:07.293 user=report_ro database=shop
+2026-11-23 03:24:11.350 +09:00 [4145] LOG:  disconnection: session time: 0:27:07.161 user=report_ro database=shop
+2026-11-23 03:24:11.380 +09:00 [4146] LOG:  disconnection: session time: 0:27:07.506 user=report_ro database=shop
+2026-11-23 03:24:11.410 +09:00 [4147] LOG:  disconnection: session time: 0:27:07.768 user=report_ro database=shop
+2026-11-23 03:24:13.351 +09:00 [4142] LOG:  duration: 52139.895 ms  statement: SELECT o.id, o.total, li.sku, li.qty FROM orders o JOIN line_items li ON li.order_id = o.id WHERE o.created_at >= '2026-10-01' ORDER BY o.created_at
+2026-11-23 03:25:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 651 buffers (0.2%); write=13.341 s
+2026-11-23 03:30:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 893 buffers (0.2%); write=14.562 s
+2026-11-23 03:35:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 349 buffers (1.2%); write=11.962 s
+2026-11-23 03:40:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 243 buffers (1.1%); write=11.985 s
+2026-11-23 03:45:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 429 buffers (0.3%); write=6.316 s
+2026-11-23 03:50:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 189 buffers (0.4%); write=24.671 s
+2026-11-23 03:55:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 481 buffers (1.2%); write=19.085 s
+2026-11-23 04:00:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 744 buffers (0.3%); write=12.759 s
+2026-11-23 04:05:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 467 buffers (1.1%); write=16.196 s
+2026-11-23 04:10:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 452 buffers (0.6%); write=20.202 s
+2026-11-23 04:15:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 412 buffers (0.6%); write=18.314 s
+2026-11-23 04:20:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 87 buffers (0.9%); write=14.781 s
+2026-11-23 04:25:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 166 buffers (1.1%); write=6.322 s
+2026-11-23 04:30:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 223 buffers (0.6%); write=22.847 s
+2026-11-23 04:35:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 355 buffers (1.2%); write=8.305 s
+2026-11-23 04:40:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 278 buffers (1.4%); write=9.175 s
+2026-11-23 04:45:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 719 buffers (1.3%); write=21.844 s
+2026-11-23 04:50:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 744 buffers (0.9%); write=21.260 s
+2026-11-23 04:55:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 569 buffers (1.2%); write=2.046 s
+2026-11-23 05:00:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 105 buffers (0.2%); write=27.406 s
+2026-11-23 05:05:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 728 buffers (0.2%); write=27.227 s
+2026-11-23 05:10:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 820 buffers (0.9%); write=14.997 s
+2026-11-23 05:15:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 178 buffers (1.0%); write=16.239 s
+2026-11-23 05:20:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 847 buffers (1.1%); write=23.566 s
+2026-11-23 05:25:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 418 buffers (0.9%); write=2.134 s
+2026-11-23 05:30:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 471 buffers (0.4%); write=3.920 s
+2026-11-23 05:35:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 768 buffers (0.3%); write=15.710 s
+2026-11-23 05:40:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 845 buffers (0.7%); write=28.328 s
+2026-11-23 05:45:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 563 buffers (0.9%); write=2.373 s
+2026-11-23 05:50:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 791 buffers (0.4%); write=2.842 s
+2026-11-23 05:55:07.000 +09:00 [61] LOG:  checkpoint complete: wrote 428 buffers (1.2%); write=27.888 s

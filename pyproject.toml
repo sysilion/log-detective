@@ -1,0 +1,27 @@
+[project]
+name = "log-detective"
+version = "0.1.0"
+description = "Natural-language log investigation agent that lives on a Fly.io Sprite (Pinecone + Ollama connectors)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+logdet = "logdet.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["logdet*"]
+
+[tool.setuptools.package-data]
+logdet = ["static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

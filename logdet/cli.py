@@ -1,0 +1,145 @@
+"""`logdet` command line interface."""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from datetime import datetime, timedelta
+
+from .config import Config, in_sprite
+
+
+def _now(cfg: Config, s: str | None) -> datetime | None:
+    if not s:
+        return None
+    dt = datetime.fromisoformat(s)
+    return dt if dt.tzinfo else dt.replace(tzinfo=cfg.tz)
+
+
+def cmd_ingest(args, cfg):
+    from .agent import Detective
+    print(f"ingesting {', '.join(args.paths)} ...")
+    res = Detective(cfg).ingest(args.paths, reset=args.reset)
+    print(f"done: {res['events']} events, {res['chunks']} chunks -> vector={res['vector']} "
+          f"embed={res['embed']} ({res['seconds']}s)")
+
+
+def cmd_ask(args, cfg):
+    from .agent import Detective
+    res = Detective(cfg).ask(args.question, now=_now(cfg, args.now), use_llm=not args.no_llm)
+    if args.json:
+        print(json.dumps(res, ensure_ascii=False, indent=2, default=str))
+        return
+    st = res["stats"]
+    print(f"\n🔎 window: {res['range']['label']}  ({res['range']['start']} → {res['range']['end']})")
+    print(f"   vector={res['vector']} embed={res['embed']} llm={res['llm']} · {res['elapsed_ms']} ms")
+    if res.get("llm_error"):
+        print(f"   (LLM failed, used heuristic: {res['llm_error']})")
+    if st["timeline"]:
+        print("   p95/min " + _spark([m["p95"] or 0 for m in st["timeline"]]))
+    print("\n" + res["answer"] + "\n")
+    if args.evidence:
+        print("evidence:")
+        for e in res["evidence"]:
+            print(f"  [{e['cite']}] {e['source']}:{e['lineno']} ({e['why']})\n       {e['line'][:200]}")
+
+
+def _spark(vals: list[float], width: int = 60) -> str:
+    if not vals:
+        return ""
+    step = max(1, len(vals) // width)
+    vals = [max(vals[i:i + step]) for i in range(0, len(vals), step)]
+    hi = max(vals) or 1
+    return "".join("▁▂▃▄▅▆▇█"[min(7, int(v / hi * 7.99))] for v in vals)
+
+
+def cmd_sample(args, cfg):
+    from .sample import generate
+    date = datetime.fromisoformat(args.date) if args.date else datetime.now(cfg.tz) - timedelta(days=1)
+    files = generate(args.out, date, cfg.tz, seed=args.seed)
+    print(f"sample incident dataset for {date:%Y-%m-%d} ({cfg.tz.key}):")
+    for f in files:
+        print(f"  {f}")
+
+
+def cmd_demo(args, cfg):
+    args.date, args.seed = getattr(args, "date", None), 7
+    cmd_sample(args, cfg)
+    args.paths, args.reset = [args.out], True
+    cmd_ingest(args, cfg)
+    print('\nnow try:  logdet ask "어제 새벽 3시에 왜 느려졌어?"')
+
+
+def cmd_serve(args, cfg):
+    from .web import serve
+    serve(cfg, args.host, args.port)
+
+
+def cmd_doctor(args, cfg):
+    from .net import discover_gateways, ollama_gateway, pinecone_gateway
+    print(f"in_sprite        : {in_sprite()}")
+    print(f"home / tz        : {cfg.home} / {cfg.tz.key}")
+    gws = discover_gateways(cfg)
+    print(f"gateway discovery: {gws or '(none)'}")
+    print(f"pinecone         : gateway={pinecone_gateway(cfg) or '-'} api_key={'set' if cfg.pinecone_api_key else '-'}"
+          f" index={cfg.pinecone_index} ns={cfg.pinecone_namespace}")
+    print(f"ollama           : gateway={ollama_gateway(cfg) or '-'} api_key={'set' if cfg.ollama_api_key else '-'}"
+          f" local={cfg.ollama_host}")
+    from .agent import Detective
+    d = Detective(cfg)
+    for label, fn in (("vector store", lambda: d.vs.name + (f" via {d.vs.via}" if hasattr(d.vs, 'via') else "")),
+                      ("embedder", lambda: f"{d.emb.name} dim={len(d.emb.embed(['probe'])[0])}"),
+                      ("llm", lambda: (lambda l: l.name if l else 'none (heuristic reports)')(
+                          __import__('logdet.llm', fromlist=['get_llm']).get_llm(cfg)))):
+        try:
+            print(f"{label:<17}: {fn()}")
+        except Exception as e:
+            print(f"{label:<17}: ERROR {e}")
+    ev, ch = d.store.counts()
+    print(f"local store      : {ev} events, {ch} chunks")
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog="logdet", description="Ask your logs why things broke.")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p = sub.add_parser("ingest", help="parse, chunk, embed and index log files/dirs")
+    p.add_argument("paths", nargs="+")
+    p.add_argument("--reset", action="store_true", help="clear local store and vector namespace first")
+    p.set_defaults(fn=cmd_ingest)
+
+    p = sub.add_parser("ask", help="ask a question in natural language")
+    p.add_argument("question")
+    p.add_argument("--now", help="pretend current time (ISO 8601), for relative phrases like 'yesterday'")
+    p.add_argument("--no-llm", action="store_true", help="skip the LLM, use the heuristic report")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("-e", "--evidence", action="store_true", help="print cited evidence lines")
+    p.set_defaults(fn=cmd_ask)
+
+    p = sub.add_parser("sample", help="generate the sample incident dataset")
+    p.add_argument("--out", default="data/sample")
+    p.add_argument("--date", help="YYYY-MM-DD (default: yesterday)")
+    p.add_argument("--seed", type=int, default=7)
+    p.set_defaults(fn=cmd_sample)
+
+    p = sub.add_parser("demo", help="generate sample data for yesterday and ingest it (resets the index)")
+    p.add_argument("--out", default="data/sample")
+    p.set_defaults(fn=cmd_demo)
+
+    p = sub.add_parser("serve", help="serve the web UI + JSON API")
+    p.add_argument("--host", default="0.0.0.0")
+    p.add_argument("--port", type=int, default=8080)
+    p.set_defaults(fn=cmd_serve)
+
+    p = sub.add_parser("doctor", help="show which connectors/backends are active")
+    p.set_defaults(fn=cmd_doctor)
+
+    args = ap.parse_args(argv)
+    try:
+        args.fn(args, Config())
+    except KeyboardInterrupt:
+        sys.exit(130)
+
+
+if __name__ == "__main__":
+    main()
