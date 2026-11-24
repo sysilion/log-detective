@@ -170,3 +170,37 @@ def test_ingest_is_idempotent_and_atomic(ingest_server):
     assert d.store.counts()[0] == 3
     _, r5 = call(base + "/api/ingest?source=app", "POST", b"2026-11-23 03:00:09 ERROR x\n", ok)
     assert r5["accepted"] == 1 and d.store.counts()[0] == 4
+
+
+def test_alerts_endpoint_and_watch_trigger(ingest_server):
+    base, d = ingest_server
+    code, res = call(base + "/api/alerts")
+    assert code == 200 and res["findings"] == [] and res["watches"][0]["name"] == "default"
+    # trigger disabled without LOGDET_TRIGGER_TOKEN
+    assert call(base + "/api/run/watch", "POST", b"{}", {"Authorization": "Bearer x"})[0] == 404
+
+
+@pytest.fixture()
+def trigger_server(det):
+    det.cfg.trigger_token = "trig-123"
+    srv = make_server(det.cfg, "127.0.0.1", 0, det=det, guard=AskGuard(100, 100))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_address[1]}"
+    srv.shutdown()
+    det.cfg.trigger_token = ""
+
+
+def test_watch_trigger_runs_one_cycle(trigger_server, det):
+    from logdet.watch import Watcher
+    Watcher(det, log=lambda *_: None).reset()
+    assert call(trigger_server + "/api/run/watch", "POST", b"{}", {"Authorization": "Bearer nope"})[0] == 401
+    det.cfg.now_override = "2026-11-23T03:05"  # demo clock right after the incident onset
+    try:
+        code, res = call(trigger_server + "/api/run/watch", "POST", b"{}", {"Authorization": "Bearer trig-123"})
+        assert code == 200 and res["new_findings"][0]["type"] == "alert"
+        code, res = call(trigger_server + "/api/run/watch", "POST", b"{}", {"Authorization": "Bearer trig-123"})
+        assert code == 200 and res["new_findings"] == []  # same incident: deduplicated
+    finally:
+        det.cfg.now_override = "2026-11-24T09:00"
+    code, res = call(trigger_server + "/api/alerts")
+    assert res["findings"][0]["severity"] in ("warning", "critical") and res["findings"][0]["evidence"]

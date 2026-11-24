@@ -25,6 +25,7 @@ from urllib.parse import parse_qs, urlsplit
 from .agent import Detective
 from .config import Config
 from .ingest import IncrementalIngestor, parse_payload
+from .watch import Watcher, recent_findings
 
 STATIC = Path(__file__).parent / "static"
 MAX_BODY = 4096
@@ -87,6 +88,12 @@ def public_view(res: dict) -> dict:
     return out
 
 
+def public_finding(f: dict) -> dict:
+    """Findings are shown publicly; drop nothing secret (they hold no URLs/keys) but keep them compact."""
+    return {k: f.get(k) for k in ("id", "type", "watch", "severity", "incident", "created", "at", "window",
+                                  "first_ts", "replay", "reasons", "summary", "llm", "evidence")}
+
+
 class BadRequest(ValueError):
     pass
 
@@ -124,6 +131,13 @@ def make_handler(det: Detective, cfg: Config, guard: AskGuard):
     ingest_limiter = MinuteLimiter(cfg.ingest_per_minute)
     ingestor = IncrementalIngestor(det)
     ingest_slots = threading.BoundedSemaphore(2)
+    run_lock = threading.Lock()
+    _watcher: list = []
+
+    def watcher() -> Watcher:
+        if not _watcher:
+            _watcher.append(Watcher(det, log=lambda m: print(m, flush=True)))
+        return _watcher[0]
 
     class Handler(BaseHTTPRequestHandler):
         timeout = 15  # seconds; slow or idle clients can't pin threads
@@ -175,6 +189,10 @@ def make_handler(det: Detective, cfg: Config, guard: AskGuard):
         def do_GET(self):
             if self.path in ("/", "/index.html"):
                 self._send(200, (STATIC / "index.html").read_bytes(), "text/html; charset=utf-8")
+            elif self.path == "/api/alerts":
+                self._json(200, {"findings": [public_finding(f) for f in recent_findings(cfg.home, 30)],
+                                 "watches": [{"name": x.name, "interval": x.interval, "lookback": x.lookback}
+                                             for x in watcher().wcfg.watches]})
             elif self.path == "/api/health":
                 with db_lock:
                     ev, ch = det.store.counts()
@@ -189,6 +207,8 @@ def make_handler(det: Detective, cfg: Config, guard: AskGuard):
             path = urlsplit(self.path).path
             if path == "/api/ingest" and cfg.ingest_token:
                 return self._ingest()
+            if path in ("/api/run/watch", "/api/run/pull-es") and cfg.trigger_token:
+                return self._run(path)
             if path not in ("/api/ask", "/api/ask/stream"):
                 return self._send(404, b"not found", "text/plain")
             try:
@@ -219,6 +239,26 @@ def make_handler(det: Detective, cfg: Config, guard: AskGuard):
                     self._json(500, {"error": "internal error"})
                 except OSError:
                     pass
+
+        def _run(self, path: str) -> None:
+            """External-scheduler trigger: one watch cycle or one Elasticsearch pull (bearer LOGDET_TRIGGER_TOKEN)."""
+            if not bearer_ok(self.headers.get("Authorization"), cfg.trigger_token):
+                return self._json(401, {"error": "missing or invalid bearer token"})
+            if not run_lock.acquire(blocking=False):
+                return self._json(409, {"error": "a run is already in progress"}, {"Retry-After": "30"})
+            try:
+                if path == "/api/run/watch":
+                    found = watcher().run_once(db_lock=db_lock)
+                    return self._json(200, {"new_findings": [public_finding(f) for f in found]})
+                from .es import pull_once
+                with db_lock:
+                    res = pull_once(det, log=lambda *_: None)
+                return self._json(200, res)
+            except Exception as e:
+                print(f"[web] run {path} failed: {e!r}")
+                return self._json(503, {"error": "run failed, retry later"}, {"Retry-After": "30"})
+            finally:
+                run_lock.release()
 
         def _ingest(self) -> None:
             """Authenticated push ingest: NDJSON, JSON array or plain lines; ?source=<name>."""

@@ -81,15 +81,21 @@ def cmd_demo(args, cfg):
 def cmd_tail(args, cfg):
     from .agent import Detective
     from .ingest import tail
-    print(f"tailing {', '.join(args.paths)} (flush every {cfg.flush_seconds:g}s, Ctrl-C to stop)", flush=True)
-    tail(Detective(cfg), args.paths, cfg.flush_seconds, log=lambda m: print(m, flush=True))
+    from .keepawake import KeepAwake
+    log = lambda m: print(m, flush=True)  # noqa: E731
+    log(f"tailing {', '.join(args.paths)} (flush every {cfg.flush_seconds:g}s, Ctrl-C to stop)")
+    with KeepAwake("tail", log=log):
+        tail(Detective(cfg), args.paths, cfg.flush_seconds, log=log)
 
 
 def cmd_pull_es(args, cfg):
     import time as _t
     from .agent import Detective
     from .es import pull_once
+    from .keepawake import KeepAwake
     det = Detective(cfg)
+    hold = KeepAwake("pull-es", enabled=None if args.loop else False, log=lambda m: print(m, flush=True))
+    hold.__enter__()
     while True:
         try:
             r = pull_once(det, log=lambda m: print(m, flush=True))
@@ -104,6 +110,61 @@ def cmd_pull_es(args, cfg):
         if not args.loop:
             return
         _t.sleep(args.interval)
+
+
+def cmd_watch(args, cfg):
+    from datetime import datetime as _dt
+    from .agent import Detective
+    from .keepawake import KeepAwake
+    from .watch import Watcher, default_replay_range
+    log = lambda m: print(m, flush=True)  # noqa: E731
+    w = Watcher(Detective(cfg), log=log)
+    log(f"watches: {', '.join(f'{x.name} (every {x.interval:g}s, lookback {x.lookback:g}s)' for x in w.wcfg.watches)}"
+        + (f" from {w.wcfg.path}" if w.wcfg.path else " (default config)"))
+    if args.reset:
+        w.reset()
+    if args.replay:
+        lb = max(x.lookback for x in w.wcfg.watches)
+        start, end = default_replay_range(w.det.store, lb)
+        if args.start:
+            start = parse_now(args.start, cfg.tz).timestamp()
+        if args.end:
+            end = parse_now(args.end, cfg.tz).timestamp()
+        log(f"replaying {_dt.fromtimestamp(start, cfg.tz):%Y-%m-%d %H:%M} -> {_dt.fromtimestamp(end, cfg.tz):%H:%M} "
+            f"on a simulated clock (speed {args.speed:g}x)")
+        found = w.replay(start, end, speed=args.speed)
+        log(f"replay done: {len(found)} finding(s)")
+        return
+    if args.once:
+        found = w.run_once()
+        log(f"{len(found)} new finding(s)" + "".join(f"\n  [{f['severity']}] {f['watch']}: {'; '.join(f['reasons'])}"
+                                                   for f in found))
+        return
+    with KeepAwake("watch", log=log):
+        w.run_forever()
+
+
+def cmd_alert_test(args, cfg):
+    import time as _t
+    from .alerts import notify, targets
+    from .watch import load_config
+    wcfg = load_config(cfg.home)
+    kinds = list(targets(wcfg.alerts))
+    if not kinds:
+        print("no alert targets configured (LOGDET_SLACK_WEBHOOK / LOGDET_DISCORD_WEBHOOK / LOGDET_ALERT_WEBHOOK)")
+        raise SystemExit(1)
+    now = _t.time()
+    sample = {"id": "test", "type": "alert", "watch": "alert-test", "severity": "warning", "created": now,
+              "window": [now - 900, now], "reasons": ["this is a test alert from 'logdet alert-test'"],
+              "summary": "**Test** alert from log-detective. If you can read this, delivery works.",
+              "llm": "none", "evidence": [{"cite": "E1", "source": "app.log", "lineno": 42,
+                                           "line": "2026-11-23 02:57:03 INFO scheduler: job nightly_sales_report started"}]}
+    res = notify(sample, cfg.tz, wcfg.alerts, wcfg.alerts.get("ui_url", ""))
+    for k in kinds:
+        code = res.get(k, 0)
+        print(f"{k:8}: {'ok' if 200 <= code < 300 else 'FAILED'} (HTTP {code})")
+    if not all(200 <= res.get(k, 0) < 300 for k in kinds):
+        raise SystemExit(1)
 
 
 def cmd_prune(args, cfg):
@@ -197,6 +258,18 @@ def main(argv=None):
     p.add_argument("--loop", action="store_true", help="keep pulling every --interval seconds (Sprite service)")
     p.add_argument("--interval", type=float, default=60)
     p.set_defaults(fn=cmd_pull_es)
+
+    p = sub.add_parser("watch", help="scheduled anomaly checks with alerts (loop, --once or --replay)")
+    p.add_argument("--once", action="store_true", help="run every watch once and exit (cron-friendly)")
+    p.add_argument("--replay", action="store_true", help="replay the stored data on a simulated clock")
+    p.add_argument("--speed", type=float, default=0, help="replay speed in simulated seconds per second (0 = max)")
+    p.add_argument("--start", help="replay start (ISO, default: first data + lookback)")
+    p.add_argument("--end", help="replay end (ISO, default: last data)")
+    p.add_argument("--reset", action="store_true", help="clear stored findings and open incidents first")
+    p.set_defaults(fn=cmd_watch)
+
+    p = sub.add_parser("alert-test", help="send a sample alert to every configured Slack/Discord/webhook target")
+    p.set_defaults(fn=cmd_alert_test)
 
     p = sub.add_parser("prune", help="delete data older than the retention period (LOGDET_RETENTION_DAYS)")
     p.add_argument("--dry-run", action="store_true", help="only count what would be deleted")

@@ -141,11 +141,13 @@ class Detective:
         return out
 
     # ------------------------------------------------------------ ask
-    def prepare(self, question: str, now: datetime | None = None) -> Investigation:
-        """Phase 1 (local, fast): time range, baseline stats, retrieval and evidence. Touches SQLite."""
+    def prepare(self, question: str, now: datetime | None = None, tr: TimeRange | None = None) -> Investigation:
+        """Phase 1 (local, fast): time range, baseline stats, retrieval and evidence. Touches SQLite.
+
+        `tr` overrides the range parsed from the question (watch mode passes its lookback window)."""
         t0 = time.time()
         now = now or parse_now(self.cfg.now_override, self.cfg.tz) or datetime.now(self.cfg.tz)
-        tr = parse_time_range(question, now, self.cfg.tz, self.store.time_range())
+        tr = tr or parse_time_range(question, now, self.cfg.tz, self.store.time_range())
         stats = analyze(self.store, tr.start_ts, tr.end_ts)
 
         query = question + "\n" + "\n".join(s["sig"] for s in stats.signatures[:5])
