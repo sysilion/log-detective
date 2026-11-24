@@ -17,7 +17,7 @@ It spots the spike, searches logs in Pinecone, and an Ollama model names the cul
 
 github.com/sysilion-ib/log-detective
 
-(Bluesky handle: @fly.io; X: @flydotio)
+(X: @flydotio. On Bluesky/LinkedIn, check Fly.io's handle there before posting.)
 
 ## LinkedIn / Reddit (longer)
 For Fly.io's Hacksgiving I built **log-detective**, a natural-language log investigation agent that runs on a Fly.io Sprite.
