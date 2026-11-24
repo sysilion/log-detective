@@ -33,8 +33,7 @@ const SCENES = [
     "The answer is buried somewhere in 30,000 log lines, across nginx, the app, and Postgres."] },
   { id: "title", type: "card", lines: [
     ["Meet log-detective: a personal SRE agent that lives on a Fly.io Sprite.",
-     "Meet log detective: a personal S R E agent that lives on a Fly dot I O Sprite."],
-    "You just ask your logs what happened."] },
+     "Meet log detective: a personal S R E agent that lives on a Fly dot I O Sprite."]] },
   { id: "term", type: "term", badge: true, lines: SPRITE ? [
     "This is the agent, running on a Fly.io Sprite.",
     "Pinecone and Gemini are reached through Sprites connectors, so no API keys live on the box.",
@@ -51,9 +50,6 @@ const SCENES = [
     ["The trigger: a nightly report job that started at 2:57 and exhausted the shared database connection pool.",
      "The trigger: a nightly report job that started at 2 57, and exhausted the shared database connection pool."],
     "Every claim cites the exact log lines."] },
-  { id: "ui2", type: "ui", badge: true, q: "What were the payment warnings around 1:30 AM yesterday?", lines: [
-    "And it doesn't chase red herrings:",
-    ["the payment warnings at 1:30 had no real impact.", "the payment warnings at one thirty had no real impact."]] },
   { id: "watch", type: "ui", alerts: true, badge: true, lines: [
     "It also watches your logs on its own.",
     ["Replaying the sample night, the watcher flagged the incident at 3:01, and called Gemini once for a cited summary.",
