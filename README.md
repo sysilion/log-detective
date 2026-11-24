@@ -103,6 +103,16 @@ Local dev against the real services (optional): keys are read from an auth file 
 | `LOGDET_OLLAMA_GATEWAY` | auto-discovered | override the Ollama Cloud gateway base URL |
 | `LOGDET_MODEL` | `gemma4:31b` (Ollama Cloud) / `qwen2.5:3b` (local) | model name; if missing, auto-picked from `/api/tags` |
 | `LOGDET_WINDOW` | `120` | chunk window (seconds) |
+| `LOGDET_RETENTION_DAYS` | `30` | prune data older than N days after each ingest (`0` = keep forever) |
+
+## Data retention
+
+Old data is pruned so the vector index and the local store don't grow forever:
+
+- `LOGDET_RETENTION_DAYS` (default **30**, `0` = keep forever). Events, chunks and Pinecone vectors whose time window ended before `now - N days` are deleted. "now" honours `LOGDET_NOW`.
+- Pruning runs automatically at the end of every `logdet ingest`. You can also run it by hand: `logdet prune --dry-run` counts what would go, `logdet prune [--days N]` deletes.
+- Pinecone deletion queries the expired IDs with a metadata filter (`ts_end < cutoff`) and deletes them by ID in batches of 1,000. This works through the Sprites gateway and with a direct key. Delete-by-ID is supported on serverless indexes and gives exact counts for `--dry-run`.
+- The public demo Sprite runs with `LOGDET_RETENTION_DAYS=0` and a pinned `LOGDET_NOW`, so its fixed sample dataset (442 vectors) is never pruned.
 
 ## Sample dataset
 
