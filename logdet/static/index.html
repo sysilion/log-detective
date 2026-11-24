@@ -43,13 +43,38 @@ const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>(
 const md=t=>esc(t).replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>")
  .replace(/\[(E\d+(?:\s*[,\-–]\s*E\d+)*)\]/g,(m,ids)=>"["+ids.replace(/E\d+/g,id=>`<a class="cite" href="#ev-${id}" data-e="${id}">${id}</a>`)+"]");
 let TZ;
+// The Sprite sleeps when idle; the first request after a long idle can hang or get a proxy page while it wakes.
+// wakeFetch retries with a friendly banner instead of failing. 429 and app errors (4xx JSON) are not retried.
+const sleepMs=ms=>new Promise(r=>setTimeout(r,ms));
+function wakeBanner(msg){let b=$("#wake");if(!msg){b&&b.remove();return}
+ if(!b){b=document.createElement("div");b.id="wake";b.className="card meta status";$("#out").before(b)}
+ b.innerHTML=`<span class="spin"></span> ${msg}`}
+async function wakeFetch(url,opts={},{budgetMs=120000,attemptMs=25000,quiet=false}={}){
+ const t0=Date.now();let k=0,last="";
+ for(;;){k++;const ac=new AbortController();const to=setTimeout(()=>ac.abort(),attemptMs);
+  try{const r=await fetch(url,{...opts,signal:ac.signal});clearTimeout(to);
+   const json=(r.headers.get("content-type")||"").includes("json");
+   // a non-JSON answer from an /api route means the proxy answered while the Sprite was waking
+   if(r.ok&&(json||!url.startsWith("api/"))){wakeBanner("");return r}
+   if(!r.ok&&json&&r.status<500){wakeBanner("");return r}
+   last="HTTP "+r.status}
+  catch(e){clearTimeout(to);last=e.name==="AbortError"?"timeout":"network error"}
+  const left=budgetMs-(Date.now()-t0);if(left<=0){wakeBanner("");throw new Error(`The Sprite didn't wake up in time (${last}). Please try again in a few seconds.`)}
+  const wait=Math.min(1500*k,5000);
+  if(!quiet)wakeBanner(`☕ Waking up the Sprite (it naps when idle)… retrying in ${Math.round(wait/1000)}s · attempt ${k}`);
+  await sleepMs(wait)}}
 const hms=ts=>ts?new Date(ts*1000).toLocaleTimeString("en-GB",{hour12:false,timeZone:TZ}):"";
 document.addEventListener("click",e=>{const a=e.target.closest("a.cite");if(!a)return;e.preventDefault();
  const row=document.getElementById("ev-"+a.dataset.e);if(!row)return;row.scrollIntoView({behavior:"smooth",block:"center"});
  row.classList.add("hl");setTimeout(()=>row.classList.remove("hl"),2200)});
 const ms=v=>v==null?"–":v>=1000?(v/1000).toFixed(1)+"s":Math.round(v)+"ms";
 EX.forEach(e=>{const c=document.createElement("button");c.type="button";c.className="chip";c.textContent=e;c.onclick=()=>{$("#q").value=e;ask()};$("#chips").append(c)});
-fetch("api/health").then(r=>r.json()).then(h=>{TZ=h.tz;$("#health").textContent=`${h.events} events · ${h.chunks} chunks indexed · tz ${h.tz}`+(h.range?` · ${h.range[0].slice(0,16)} → ${h.range[1].slice(0,16)}`:"")+(h.now?` · demo clock pinned to ${h.now.slice(0,16)} (so "yesterday" = the sample incident day)`:"")}).catch(()=>{});
+let lastSeen=Date.now();
+// after the tab was hidden or idle for a while, ping health so the Sprite is awake before "Ask" is clicked
+const prewake=()=>{if(Date.now()-lastSeen>45000)wakeFetch("api/health",{},{quiet:true}).catch(()=>{});lastSeen=Date.now()};
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)prewake()});window.addEventListener("focus",prewake);
+$("#q").addEventListener("focus",prewake);
+wakeFetch("api/health").then(r=>r.json()).then(h=>{TZ=h.tz;$("#health").textContent=`${h.events} events · ${h.chunks} chunks indexed · tz ${h.tz}`+(h.range?` · ${h.range[0].slice(0,16)} → ${h.range[1].slice(0,16)}`:"")+(h.now?` · demo clock pinned to ${h.now.slice(0,16)} (so "yesterday" = the sample incident day)`:"")}).catch(()=>{});
 $("#f").onsubmit=e=>{e.preventDefault();ask()};
 function chart(st){const tl=st.timeline;if(!tl.length)return"";const W=900,H=120,mx=Math.max(...tl.map(m=>m.p95||0))||1,bw=W/tl.length,a=st.anomaly;
  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="p95 latency per minute">`;
@@ -66,7 +91,7 @@ function renderAnswer(text,live){$("#ans").innerHTML=md(text)+(live?'<span class
 function renderDone(d,ttfb){$("#ansmeta").innerHTML=`llm: ${esc(d.llm)} · vector: ${esc(d.vector)} · embed: ${esc(d.embed)} · ${d.elapsed_ms} ms${ttfb?` (stats in ${ttfb} ms)`:""}${d.cached?" · cached":""}${d.llm_fallback?` · <span class="err">LLM unavailable, rule-based answer</span>`:""}${d.retrieval_fallback?` · <span class="err">vector store unavailable, local re-ranking</span>`:""}`}
 async function ask(){const q=$("#q").value.trim();if(!q)return;$("#b").disabled=true;const t0=performance.now();
  $("#out").innerHTML=`<div class="card meta status"><span class="spin"></span> Investigating… computing baseline stats and searching Pinecone</div>`;
- try{const r=await fetch("api/ask/stream",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q})});
+ try{const r=await wakeFetch("api/ask/stream",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q})},{attemptMs:30000});lastSeen=Date.now();
   if(!r.ok){let m="HTTP "+r.status;try{m=(await r.json()).error||m}catch{}throw new Error(m)}
   const rd=r.body.getReader(),dec=new TextDecoder();let buf="",text="",ttfb=0;
   for(;;){const {done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});let i;
