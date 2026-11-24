@@ -90,7 +90,12 @@ class Detective:
 
         query = question + "\n" + "\n".join(s["sig"] for s in stats.signatures[:5])
         qv = self.emb.embed([query], "query")[0]
-        hits = self.vs.query(qv, top_k=8, start=tr.start_ts - 1800, end=tr.end_ts)
+        retrieval_error = None
+        try:
+            hits = self.vs.query(qv, top_k=8, start=tr.start_ts - 1800, end=tr.end_ts)
+        except Exception as e:  # vector store unreachable: rank this window's chunks locally
+            retrieval_error = f"{self.vs.name}: {str(e)[:200]}"
+            hits = local_rerank(self.store.chunks_between(tr.start_ts - 1800, tr.end_ts), query, top_k=8)
         evidence = self._evidence(stats, hits)
 
         llm = get_llm(self.cfg) if use_llm else None
@@ -108,7 +113,7 @@ class Detective:
             "question": question,
             "range": {"start": tr.start.isoformat(), "end": tr.end.isoformat(), "label": tr.label,
                       "explicit": tr.explicit},
-            "answer": answer, "llm": llm_name, "llm_error": llm_error,
+            "answer": answer, "llm": llm_name, "llm_error": llm_error, "retrieval_error": retrieval_error,
             "vector": self.vs.name, "embed": self.emb.name,
             "stats": stats.to_dict(), "evidence": evidence,
             "retrieved": [{"id": h["id"], "score": round(h["score"], 3), "source": h["metadata"].get("source"),
@@ -181,21 +186,43 @@ class Detective:
         if stats.paths:
             lines.append("SLOWEST ENDPOINTS: " + "; ".join(
                 f"{p['path']} p95 {_ms(p['p95'])} (baseline {_ms(p['base_p95'])})" for p in stats.paths[:3]))
+        if stats.changes:
+            lines.append("CHANGE EVENTS (deploys/jobs/restarts, from 30 min before the window):")
+            for c in stats.changes[:8]:
+                lines.append(f"- {fmt(c['ts'])} {c['source']}: {c['msg'][:160]}")
         lines.append("EVIDENCE LOG LINES (cite as [E#]):")
         for e in evidence:
             lines.append(f"[{e['cite']}] {e['source']}:{e['lineno']} {e['line']}")
         return "\n".join(lines)
 
 
+def local_rerank(chunks, query: str, top_k: int = 8) -> list[dict]:
+    """Fallback retrieval: hash-embed the window's chunks on the fly and rank by cosine."""
+    from .embed import HashEmbedder
+    if not chunks:
+        return []
+    emb = HashEmbedder()
+    q = emb.embed([query])[0]
+    vecs = emb.embed([c.text for c in chunks])
+    scored = sorted(((sum(a * b for a, b in zip(q, v)), c) for v, c in zip(vecs, chunks)), key=lambda x: -x[0])
+    return [{"id": c.id, "score": sc, "metadata": {"source": c.source, "ts_start": c.ts_start, "ts_end": c.ts_end,
+                                                   "n_errors": c.n_errors, "text": c.text}} for sc, c in scored[:top_k]]
+
+
 SYSTEM_PROMPT = """You are Log Detective, a senior SRE investigating an incident from log evidence.
-Answer in the same language as the QUESTION (Korean question -> Korean answer).
-Use ONLY the statistics and evidence provided. Cite evidence lines inline as [E1], [E2]...
-Format:
-1. One-sentence answer (what happened, when, impact with numbers).
-2. Timeline (3-6 bullets, HH:MM).
-3. Root-cause hypothesis and why the evidence supports it; mention confidence (high/medium/low).
-4. Next steps to confirm/fix (2-3 bullets).
-Keep it under 250 words. Do not invent log lines or numbers."""
+Write the whole answer in the same language as the QUESTION (Korean question -> natural Korean answer).
+Use ONLY the statistics, change events and evidence provided; never invent log lines, numbers or services.
+Cite evidence inline as [E1], [E2]. Every claim about the cause must cite at least one line.
+Reasoning rules:
+- Correlate: the trigger usually starts shortly BEFORE the first anomalous minute, and recovery follows when it ends.
+- Prefer a change event whose timing matches both onset and recovery; explicitly dismiss changes that do not (red herrings).
+- If ANOMALY is "none detected", say so plainly and do not force a root cause.
+Format (markdown, under 220 words):
+**요약/Summary** - one sentence: what happened, when, impact with numbers.
+**타임라인/Timeline** - 3-6 bullets "HH:MM - event [E#]".
+**원인 가설/Root cause** - hypothesis, mechanism, confidence (high/medium/low).
+**다음 조치/Next steps** - 2-3 concrete bullets to confirm or fix.
+Use only the label in the question's language (e.g. "요약" for Korean, "Summary" for English)."""
 
 
 def _ms(v) -> str:

@@ -18,6 +18,9 @@ KST = ZoneInfo("Asia/Seoul")
 class FakeGateway:
     def __init__(self):
         self.calls, self.vectors = [], {}
+        self.fail_query = False      # Pinecone /query -> 503
+        self.fail_chat = False       # Ollama /api/chat -> 500
+        self.cloud_models = None     # e.g. ["glm-5.3-flash"]: /api/chat 404s for other models
         fake = self
 
         class H(BaseHTTPRequestHandler):
@@ -34,6 +37,8 @@ class FakeGateway:
 
             def do_GET(self):
                 fake.calls.append(("GET", self.path, None, dict(self.headers)))
+                if self.path.endswith("/api/tags"):
+                    return self._reply({"models": [{"name": m} for m in (fake.cloud_models or [])]})
                 if self.path.endswith("/indexes/log-detective"):
                     return self._reply({"name": "log-detective", "dimension": 384, "host": "unused"})
                 self._reply({"error": "nope"}, 404)
@@ -50,6 +55,8 @@ class FakeGateway:
                     fake.vectors.clear()
                     return self._reply({})
                 if p.endswith("/query"):
+                    if fake.fail_query:
+                        return self._reply({"error": "upstream unavailable"}, 503)
                     f = body["filter"]["$and"]
                     lt, gt = f[0]["ts_start"]["$lt"], f[1]["ts_end"]["$gt"]
                     ms = [v for v in fake.vectors.values() if v["metadata"]["ts_start"] < lt
@@ -58,6 +65,10 @@ class FakeGateway:
                     return self._reply({"matches": [{"id": v["id"], "score": 0.5, "metadata": v["metadata"]}
                                                     for v in ms[:body["topK"]]]})
                 if p.endswith("/api/chat"):
+                    if fake.fail_chat:
+                        return self._reply({"error": "internal"}, 500)
+                    if fake.cloud_models is not None and body["model"] not in fake.cloud_models:
+                        return self._reply({"error": f"model '{body['model']}' not found"}, 404)
                     return self._reply({"message": {"role": "assistant", "content": "LLM says: pool exhausted [E1]"}})
                 self._reply({"error": "unknown"}, 404)
 
@@ -110,3 +121,61 @@ def test_parse_gateway_list_variants():
     assert got["pinecone"] == "https://api.sprites.dev/v1/gateway/pinecone/conn_a"
     assert got["ollama"] == "https://api.sprites.dev/v1/gateway/ollama-cloud/conn_b"
     assert "box" not in got
+
+
+NOW = datetime(2026, 11, 24, 9, 0, tzinfo=KST)
+Q = "어제 새벽 3시에 왜 느려졌어?"
+
+
+@pytest.fixture()
+def gw_det(gw, tmp_path):
+    gw.fail_query = gw.fail_chat = False
+    gw.cloud_models = None
+    generate(tmp_path / "logs", datetime(2026, 11, 23), KST, hours=4)
+    cfg = Config()
+    cfg.home, cfg.tz, cfg.vector, cfg.embed, cfg.llm = tmp_path / "home", KST, "auto", "hash", "auto"
+    cfg.pinecone_gateway = gw.base + "/pinecone/conn_test"
+    cfg.ollama_gateway = gw.base + "/ollama/conn_test2"
+    d = Detective(cfg)
+    d.ingest([str(tmp_path / "logs")], reset=True, log=lambda *_: None)
+    return d
+
+
+def test_pinecone_down_falls_back_to_local_rerank(gw, gw_det):
+    gw.fail_query = True
+    res = gw_det.ask(Q, now=NOW)
+    assert res["retrieval_error"] and "503" in res["retrieval_error"]
+    assert res["retrieved"] and res["answer"].startswith("LLM says")
+    assert any("nightly_sales_report" in e["line"] for e in res["evidence"])
+
+
+def test_missing_model_is_auto_picked(gw, gw_det):
+    gw.cloud_models = ["glm-5.3-flash", "kimi-k3"]
+    res = gw_det.ask(Q, now=NOW)
+    assert res["llm"].endswith(":glm-5.3-flash") and res["answer"].startswith("LLM says")
+    tried = [c[2]["model"] for c in gw.calls if c[1].endswith("/api/chat")][-2:]
+    assert tried == ["gemma4:31b", "glm-5.3-flash"]
+
+
+def test_llm_down_falls_back_to_heuristic(gw, gw_det):
+    gw.fail_chat = True
+    res = gw_det.ask(Q, now=NOW)
+    assert res["llm"].startswith("heuristic") and "500" in res["llm_error"]
+    assert "nightly_sales_report" in res["answer"]
+
+
+def test_no_connectors_means_local_everything(tmp_path):
+    cfg = Config()
+    cfg.home = tmp_path / "home"
+    d = Detective(cfg)
+    assert d.vs.name == "local" and d.emb.name == "hash"
+    from logdet.llm import get_llm
+    cfg.ollama_host = "http://127.0.0.1:9"  # nothing listening
+    assert get_llm(cfg) is None
+
+
+def test_pick_model_prefers_known_families():
+    from logdet.llm import pick_model
+    assert pick_model(["kimi-k3", "gemma4:12b", "gemma4:31b"]) == "gemma4:31b"
+    assert pick_model(["zzz:1b", "deepseek-v4.1-flash"]) == "deepseek-v4.1-flash"
+    assert pick_model(["zzz:1b"]) == "zzz:1b" and pick_model([]) is None

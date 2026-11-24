@@ -63,7 +63,7 @@ GitHub, Slack, Linear, Notion, Box, Pinecone, Ollama Cloud, TypeSafeAI, ...). Pa
 
 ### Ollama connector (used: LLM)
 - **The only Ollama connector is "Ollama Cloud"** (key from https://ollama.com/settings/keys). It does *not* reach an Ollama server running on your laptop or in the Sprite.
-- We call `<gateway>/api/chat` (Ollama's native API, `stream:false`). Default model `gpt-oss:20b` (override with `LOGDET_MODEL`, e.g. `gpt-oss:120b`).
+- We call `<gateway>/api/chat` (Ollama's native API, `stream:false`). Default model `gemma4:31b` (the Ollama Cloud docs' example; direct/gateway calls use bare tags, no `-cloud` suffix). If the model is missing, we list `/api/tags` and pick a preferred one. Override with `LOGDET_MODEL`. Cloud usage is metered in credits on your Ollama account (see ollama.com/pricing).
 - Privacy angle: raw logs and stats stay on the Sprite. Only the compact prompt (stats + about 14 cited lines) goes to Ollama Cloud.
   To keep everything on the box, run `ollama serve` inside the Sprite (CPU only, small model such as `qwen2.5:3b`) with `LOGDET_LLM=ollama`.
 

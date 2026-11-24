@@ -5,7 +5,7 @@
 ```
 $ logdet ask "어제 새벽 3시에 왜 느려졌어?"     # (abbreviated example output)
 🔎 window: 2026-11-23 03:00  (02:30 → 04:00)
-   vector=pinecone embed=hash llm=ollama-cloud(sprites-connector):gpt-oss:20b
+   vector=pinecone embed=hash llm=ollama-cloud(sprites-connector):gemma4:31b
    p95/min ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁████████████████████████████▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 02:59~03:27 사이 p95 지연이 141ms → 3.2s(약 23배)로 치솟았고 5xx 비율은 최대 38%였습니다.
@@ -42,6 +42,7 @@ Built for **Fly.io Hacksgiving 2026**. It uses two Sprites connectors: **Pinecon
 
 - **Connectors, no secrets:** on a Sprite the Pinecone and Ollama endpoints are auto-discovered from `https://api.sprites.dev/v1/gateway/list`, and the gateway injects credentials. Nothing to put in `.env`.
 - **Logs stay on the box:** raw events and stats live in local SQLite. The LLM sees only the compact stats plus about 14 cited lines.
+- **Degrades gracefully:** Pinecone unreachable → local re-ranking of the window's chunks. Model missing → auto-picked from `/api/tags`. LLM down → deterministic heuristic report.
 - **No dependencies:** Python 3.10+ standard library only. Works fully offline (local vector store + heuristic report) for development and tests.
 
 ## Quick start (local, offline)
@@ -92,7 +93,7 @@ Local dev against the real services (optional): `PINECONE_API_KEY=...` (direct P
 | `LOGDET_EMBED` | `hash` | `hash` (384-d, local) / `pinecone` (Inference, 1024-d) / `ollama` |
 | `LOGDET_LLM` | `auto` | `auto` (Ollama connector → `OLLAMA_API_KEY` → local ollama → heuristic) / `ollama` / `ollama-cloud` / `none` |
 | `LOGDET_OLLAMA_GATEWAY` | auto-discovered | override the Ollama Cloud gateway base URL |
-| `LOGDET_MODEL` | `gpt-oss:20b` (cloud) / `qwen2.5:3b` (local) | model name |
+| `LOGDET_MODEL` | `gemma4:31b` (cloud) / `qwen2.5:3b` (local) | model name; if missing, auto-picked from `/api/tags` |
 | `LOGDET_WINDOW` | `120` | chunk window (seconds) |
 
 ## Sample dataset
@@ -103,17 +104,24 @@ There are red herrings too: a routine deploy at 01:10, slow payment-provider war
 
 ## Demo script (1–2 min video)
 
-1. **(0:00) Hook.** Terminal + browser side by side. Say: "It's 9am, checkout was slow at 3am. Instead of grepping three log files, I ask my Sprite."
-2. **(0:10) It lives on a Sprite.** Run `sprite list`, then `sprite exec -s log-detective -- ~/.local/bin/logdet doctor`. Point at `pinecone via gateway` and `ollama-cloud(sprites-connector)`, and note that no API keys are on the box.
-3. **(0:25) Ingest.** Run `sprite exec -s log-detective -- ~/.local/bin/logdet demo`: 30k lines → 442 chunks → Pinecone.
-4. **(0:40) Ask in Korean.** In the web UI (Sprite URL) click "어제 새벽 3시에 왜 느려졌어?". Show the p95 chart with the shaded anomaly, the tiles (141 ms → 3.2 s, 5xx 38%), and the answer that names the 02:57 batch job with [E#] citations.
-5. **(1:10) Ask in English, different angle.** "What happened yesterday?" or "어제 새벽 1시 반쯤 결제 경고는 뭐였어?" It correctly says there was no major impact (red herring).
-6. **(1:30) Close.** "Pinecone and Ollama through Sprites connectors, logs stay on the box. Code: github.com/sysilion-ib/log-detective #Hacksgiving @flydotio"
+**Before recording:** run `SPRITE=log-detective ./scripts/sprite-deploy.sh` on the day of recording, so the sample incident is dated *yesterday*. Then warm it up once with `sprite exec -s log-detective -- ~/.local/bin/logdet ask "어제 새벽 3시에 왜 느려졌어?"`, which wakes the Sprite and the model. Open the Sprite URL in a browser. Use a large terminal font.
+
+| time | screen | action / narration |
+|---|---|---|
+| 0:00–0:10 | browser, empty UI | "It's 9am. Checkout was slow at 3am. Instead of grepping three log files, I ask the agent that lives on my Sprite." |
+| 0:10–0:25 | terminal | `sprite list` then `sprite exec -s log-detective -- ~/.local/bin/logdet doctor`. Point at `pinecone … via gateway` and `ollama-cloud(sprites-connector)`: "two Sprites connectors, and no API keys on the box." |
+| 0:25–0:35 | terminal | `sprite exec -s log-detective -- ~/.local/bin/logdet demo`. "30k log lines from nginx, the app and Postgres, chunked and embedded into Pinecone." |
+| 0:35–1:05 | browser | Click **어제 새벽 3시에 왜 느려졌어?** Pause on the p95 chart (shaded anomaly), the tiles (141 ms → 3.2 s, 5xx 38%), then the answer naming the **02:57 nightly_sales_report job** exhausting the shared connection pool, with [E#] citations. Scroll the evidence list. |
+| 1:05–1:20 | browser | Click **어제 새벽 1시 반쯤 결제 경고는 뭐였어?** It says there was no real impact, so it doesn't chase red herrings. |
+| 1:20–1:30 | terminal | `sprite exec -s log-detective -- ~/.local/bin/logdet ask "Why did checkout slow down at 3am yesterday?"`: the same investigation in English, from the CLI. |
+| 1:30–1:40 | README / repo | "log-detective on a Fly.io Sprite, Pinecone + Ollama connectors. Code on GitHub. #Hacksgiving @flydotio" |
+
+Post texts and the form description are in [docs/SUBMISSION.md](docs/SUBMISSION.md).
 
 ## Development
 
 ```sh
-uv run --with pytest pytest -q    # 21 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector wire tests
+uv run --with pytest pytest -q    # 26 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector + fallback tests
 ```
 
 Notes on Sprites and the connector research are in [docs/SPRITES.md](docs/SPRITES.md).
