@@ -73,7 +73,7 @@ def cmd_sample(args, cfg):
 def cmd_demo(args, cfg):
     args.date, args.seed = getattr(args, "date", None), 7
     cmd_sample(args, cfg)
-    args.paths, args.reset = [args.out], True
+    args.paths, args.reset, args.follow_state = [args.out], True, False
     cmd_ingest(args, cfg)
     print('\nnow try:  logdet ask "어제 새벽 3시에 왜 느려졌어?"')
 

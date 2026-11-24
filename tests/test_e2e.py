@@ -76,3 +76,14 @@ def test_pinned_demo_clock(det):
 def test_clean_answer_drops_section_name_citations():
     from logdet.agent import clean_answer
     assert clean_answer("job finished [change events]. pool [E1] ok [CHANGE EVENTS]") == "job finished. pool [E1] ok"
+
+
+def test_cli_demo_command_runs(tmp_path, monkeypatch):
+    """Regression: `logdet demo` (used by the Sprite deploy) must keep working when ingest grows flags."""
+    from logdet.cli import main
+    monkeypatch.setenv("LOGDET_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("LOGDET_VECTOR", "local")
+    monkeypatch.setenv("LOGDET_LLM", "none")
+    main(["demo", "--out", str(tmp_path / "sample")])
+    main(["ingest", "--follow-state", str(tmp_path / "sample")])
+    main(["watch", "--once"])
