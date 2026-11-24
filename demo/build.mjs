@@ -54,6 +54,11 @@ const SCENES = [
   { id: "ui2", type: "ui", badge: true, q: "What were the payment warnings around 1:30 AM yesterday?", lines: [
     "And it doesn't chase red herrings:",
     ["the payment warnings at 1:30 had no real impact.", "the payment warnings at one thirty had no real impact."]] },
+  { id: "watch", type: "ui", alerts: true, badge: true, lines: [
+    "It also watches your logs on its own.",
+    ["Replaying the sample night, the watcher flagged the incident at 3:01, and called Gemini once for a cited summary.",
+     "Replaying the sample night, the watcher flagged the incident at three oh one, and called Gemini once for a cited summary."],
+    "Alerts go to Slack or Discord, deduplicated per incident."] },
   { id: "arch", type: "card", lines: [
     "Under the hood, raw logs stay on the Sprite.",
     "Pinecone handles time-filtered vector search, and Gemini writes the hypothesis.",
@@ -151,7 +156,16 @@ async function record(browser, scene, narr, termSteps) {
 
   let action = Promise.resolve();
   if (scene.type === "term") action = page.evaluate((steps) => window.playTerm(steps), termSteps);
-  if (scene.type === "ui") action = (async () => {
+  if (scene.type === "ui" && scene.alerts) action = (async () => {
+    await page.waitForSelector("#alerts .al", { timeout: 30000 });
+    await sleep(600);
+    await page.evaluate(() => window.scrollTo({ top: document.querySelector("#alerts").getBoundingClientRect().top
+      + window.scrollY - 40, behavior: "smooth" }));
+    await sleep(2500);
+    const more = await page.$("#alerts .al button.more");
+    if (more) await more.click();  // expand the alert's cited summary
+  })();
+  else if (scene.type === "ui") action = (async () => {
     await sleep(500);
     await page.click("#q");
     await page.keyboard.type(scene.q, { delay: 40 });
