@@ -72,3 +72,11 @@ GitHub, Slack, Linear, Notion, Box, Pinecone, Ollama Cloud, TypeSafeAI, ...). Pa
 - Embeddings default to a local 384-d feature-hashing embedder (log text is lexical). This keeps it deterministic and offline-testable.
   Optional: `LOGDET_EMBED=pinecone` (Pinecone Inference `multilingual-e5-large`, 1024-d, needs a 1024-d index) or `LOGDET_EMBED=ollama`.
 - Everything degrades gracefully: no Pinecone → local JSON vector store; no LLM → deterministic heuristic report.
+
+### Google Gemini connector (used: default LLM, free tier)
+- Fly ecosystem entry: "Use Gemini models with your Google API key held outside the Sprite." Credential: a Gemini API key from aistudio.google.com.
+  Generation, streaming, token counting and model listing are forwarded. No Vertex AI. Bodies are capped at 8 MB.
+- We call `<gateway>/v1beta/models/<model>:generateContent` with `systemInstruction`. Locally the direct API uses `x-goog-api-key`.
+- Model `gemini-3.5-flash-lite`: stable, free tier, minimal thinking by default. Measured on the sample incident: **4.3–4.9 s per answer**, high-quality cited answers in Korean and English.
+  We also tried `gemini-3.8-flash`: it returned 503 "high demand" after about 31 s (2026-11-24), so we retry once on the default model.
+- Ollama Cloud returned **402 "Add usage credits"**, so it is not free. It stays as an optional backend (`LOGDET_LLM=ollama`).

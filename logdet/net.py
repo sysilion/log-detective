@@ -73,6 +73,8 @@ def parse_gateway_list(payload: Any) -> dict[str, str]:
             found.setdefault("pinecone", base)
         elif "ollama" in key_src:
             found.setdefault("ollama", base)
+        elif "gemini" in key_src or "google" in key_src:
+            found.setdefault("gemini", base)
         else:
             found.setdefault(name, base)
     return found
@@ -102,3 +104,7 @@ def pinecone_gateway(cfg: Config) -> str:
 
 def ollama_gateway(cfg: Config) -> str:
     return cfg.ollama_gateway.rstrip("/") or discover_gateways(cfg).get("ollama", "")
+
+
+def gemini_gateway(cfg: Config) -> str:
+    return cfg.gemini_gateway.rstrip("/") or discover_gateways(cfg).get("gemini", "")

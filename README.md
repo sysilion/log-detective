@@ -5,7 +5,7 @@
 ```
 $ logdet ask "어제 새벽 3시에 왜 느려졌어?"     # (abbreviated example output)
 🔎 window: 2026-11-23 03:00  (02:30 → 04:00)
-   vector=pinecone embed=hash llm=ollama-cloud(sprites-connector):gemma4:31b
+   vector=pinecone embed=hash llm=gemini(sprites-connector):gemini-3.5-flash-lite
    p95/min ▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁████████████████████████████▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
 
 02:59~03:27 사이 p95 지연이 141ms → 3.2s(약 23배)로 치솟았고 5xx 비율은 최대 38%였습니다.
@@ -13,9 +13,9 @@ $ logdet ask "어제 새벽 3시에 왜 느려졌어?"     # (abbreviated exampl
 이 공유 커넥션 풀(50개)을 점유해 checkout 요청이 커넥션을 3초간 기다리다 타임아웃 [E4] ...
 ```
 
-Built for **Fly.io Hacksgiving 2026**. It uses two Sprites connectors: **Pinecone** (vector search over log chunks) and **Ollama Cloud** (the LLM that writes the root-cause hypothesis).
+Built for **Fly.io Hacksgiving 2026**. It uses Sprites connectors: **Pinecone** (vector search over log chunks) and **Google Gemini** (free-tier `gemini-3.5-flash-lite` writes the root-cause hypothesis). **Ollama Cloud** is supported as an alternative LLM.
 
-> **Submission blurb:** log-detective is a log-investigation agent living on a Fly.io Sprite. Ask "why did checkout slow down at 3am yesterday?" in English or Korean and it computes latency/error spikes against a baseline, retrieves the relevant log chunks from Pinecone, and has an Ollama model write a root-cause hypothesis that cites the exact log lines, all through Sprites connectors, so no API keys live on the box.
+> **Submission blurb:** log-detective is a log-investigation agent living on a Fly.io Sprite. Ask "why did checkout slow down at 3am yesterday?" in English or Korean and it computes latency/error spikes against a baseline, retrieves the relevant log chunks from Pinecone, and has an LLM (Gemini, or Ollama Cloud) write a root-cause hypothesis that cites the exact log lines, all through Sprites connectors, so no API keys live on the box.
 
 ## How it works
 
@@ -35,12 +35,12 @@ Built for **Fly.io Hacksgiving 2026**. It uses two Sprites connectors: **Pinecon
  │      NEW error signatures, slow endpoints, change events (deploy/job)  │
  │   3. vector search with time-overlap filter  ◄─────────────────────────┼──► Pinecone query
  │   4. evidence lines [E1..E14] (first occurrences, changes, slow ops)   │
- │   5. prompt (stats + evidence) ─► api.sprites.dev/v1/gateway/ollama/.. ─┼──► Ollama Cloud /api/chat
+ │   5. prompt (stats + evidence) ─► api.sprites.dev/v1/gateway/gemini/.. ─┼──► Gemini (or Ollama Cloud)
  │   6. answer with citations (heuristic fallback if no LLM)              │
  └────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Connectors, no secrets:** on a Sprite the Pinecone and Ollama endpoints are auto-discovered from `https://api.sprites.dev/v1/gateway/list`, and the gateway injects credentials. Nothing to put in `.env`.
+- **Connectors, no secrets:** on a Sprite the Pinecone, Gemini and Ollama endpoints are auto-discovered from `https://api.sprites.dev/v1/gateway/list`, and the gateway injects credentials. Nothing to put in `.env`.
 - **Logs stay on the box:** raw events and stats live in local SQLite. The LLM sees only the compact stats plus about 14 cited lines.
 - **Degrades gracefully:** Pinecone unreachable → local re-ranking of the window's chunks. Model missing → auto-picked from `/api/tags`. LLM down → deterministic heuristic report.
 - **No dependencies:** Python 3.10+ standard library only. Works fully offline (local vector store + heuristic report) for development and tests.
@@ -59,8 +59,9 @@ logdet serve --port 8080    # web UI at http://localhost:8080
 
 Use your own logs: `logdet ingest /var/log/nginx/access.log ./app.jsonl --reset`.
 
-Local dev against the real services (optional): `PINECONE_API_KEY=...` (direct Pinecone, index auto-created) and
-`OLLAMA_API_KEY=...` (Ollama Cloud), or a local `ollama serve` (auto-detected; `LOGDET_MODEL=qwen2.5:3b`).
+Local dev against the real services (optional): keys are read from an auth file (default `~/proj/auth.json`, override with
+`LOGDET_AUTH_FILE`; format `{"pinecone": {"type": "api", "key": "..."}, "google": {...}, "ollama": {...}}`) or from the env vars
+`PINECONE_API_KEY`, `GEMINI_API_KEY` and `OLLAMA_API_KEY`. Never commit that file.
 
 ## Deploy on a Sprite
 
@@ -71,7 +72,8 @@ Local dev against the real services (optional): `PINECONE_API_KEY=...` (direct P
    ```
    In **Fly.io dashboard → Sprites → Connectors**:
    - **Pinecone:** add your Pinecone API key. In the Pinecone console create index `log-detective` (dimension **384**, cosine, serverless).
-   - **Ollama Cloud:** add a key from https://ollama.com/settings/keys.
+   - **Google Gemini:** add a Gemini API key from https://aistudio.google.com (free tier works).
+   - **Ollama Cloud** (optional): add a key from https://ollama.com/settings/keys. It needs usage credits.
    - Access policy: allow sprites named `log-detective`, or allow all.
 2. Deploy:
    ```sh
@@ -91,9 +93,12 @@ Local dev against the real services (optional): `PINECONE_API_KEY=...` (direct P
 | `LOGDET_PINECONE_INDEX` / `_NAMESPACE` | `log-detective` / `logs` | Pinecone index and namespace |
 | `LOGDET_PINECONE_GATEWAY` | auto-discovered | override, e.g. `https://api.sprites.dev/v1/gateway/pinecone/conn_xxx` |
 | `LOGDET_EMBED` | `hash` | `hash` (384-d, local) / `pinecone` (Inference, 1024-d) / `ollama` |
-| `LOGDET_LLM` | `auto` | `auto` (Ollama connector → `OLLAMA_API_KEY` → local ollama → heuristic) / `ollama` / `ollama-cloud` / `none` |
+| `LOGDET_LLM` | `auto` | `auto` (Gemini → Ollama Cloud → local ollama → rule-based) / `gemini` / `ollama` / `ollama-local` / `none` |
+| `LOGDET_GEMINI_MODEL` | `gemini-3.5-flash-lite` | Gemini model (stable, free tier); 503/429 → one retry on the default |
+| `LOGDET_GEMINI_GATEWAY` | auto-discovered | override the Gemini gateway base URL |
+| `LOGDET_AUTH_FILE` | `~/proj/auth.json` | local key file (direct-API mode only) |
 | `LOGDET_OLLAMA_GATEWAY` | auto-discovered | override the Ollama Cloud gateway base URL |
-| `LOGDET_MODEL` | `gemma4:31b` (cloud) / `qwen2.5:3b` (local) | model name; if missing, auto-picked from `/api/tags` |
+| `LOGDET_MODEL` | `gemma4:31b` (Ollama Cloud) / `qwen2.5:3b` (local) | model name; if missing, auto-picked from `/api/tags` |
 | `LOGDET_WINDOW` | `120` | chunk window (seconds) |
 
 ## Sample dataset
@@ -121,7 +126,7 @@ Post texts and the form description are in [docs/SUBMISSION.md](docs/SUBMISSION.
 ## Development
 
 ```sh
-uv run --with pytest pytest -q    # 26 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector + fallback tests
+uv run --with pytest pytest -q    # 28 tests: parsers, ko/en time parsing, offline e2e, fake-gateway connector + fallback tests
 ```
 
 Notes on Sprites and the connector research are in [docs/SPRITES.md](docs/SPRITES.md).

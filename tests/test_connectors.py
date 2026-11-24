@@ -64,6 +64,9 @@ class FakeGateway:
                     ms.sort(key=lambda v: -sum(a * b for a, b in zip(v["values"], body["vector"])))
                     return self._reply({"matches": [{"id": v["id"], "score": 0.5, "metadata": v["metadata"]}
                                                     for v in ms[:body["topK"]]]})
+                if ":generateContent" in p:
+                    return self._reply({"candidates": [{"content": {"parts": [
+                        {"text": "thinking...", "thought": True}, {"text": "Gemini says: pool exhausted [E1]"}]}}]})
                 if p.endswith("/api/chat"):
                     if fake.fail_chat:
                         return self._reply({"error": "internal"}, 500)
@@ -160,7 +163,7 @@ def test_missing_model_is_auto_picked(gw, gw_det):
 def test_llm_down_falls_back_to_heuristic(gw, gw_det):
     gw.fail_chat = True
     res = gw_det.ask(Q, now=NOW)
-    assert res["llm"].startswith("heuristic") and "500" in res["llm_error"]
+    assert res["llm"].startswith("rule-based") and "500" in res["llm_error"]
     assert "nightly_sales_report" in res["answer"]
 
 
@@ -179,3 +182,27 @@ def test_pick_model_prefers_known_families():
     assert pick_model(["kimi-k3", "gemma4:12b", "gemma4:31b"]) == "gemma4:31b"
     assert pick_model(["zzz:1b", "deepseek-v4.1-flash"]) == "deepseek-v4.1-flash"
     assert pick_model(["zzz:1b"]) == "zzz:1b" and pick_model([]) is None
+
+
+def test_gemini_through_gateway_is_preferred(gw, gw_det):
+    gw_det.cfg.gemini_gateway = gw.base + "/gemini/conn_g"
+    res = gw_det.ask(Q, now=NOW)
+    assert res["llm"] == "gemini(sprites-connector):gemini-3.5-flash-lite"
+    assert res["answer"] == "Gemini says: pool exhausted [E1]"  # thought parts are dropped
+    call = next(c for c in reversed(gw.calls) if ":generateContent" in c[1])
+    assert call[1] == "/v1/gateway/gemini/conn_g/v1beta/models/gemini-3.5-flash-lite:generateContent"
+    assert "x-goog-api-key" not in {k.lower() for k in call[3]}
+    assert call[2]["systemInstruction"]["parts"][0]["text"].startswith("You are Log Detective")
+
+
+def test_auth_file_format(tmp_path, monkeypatch):
+    import json as _j
+    from logdet.config import Config as C
+    f = tmp_path / "auth.json"
+    f.write_text(_j.dumps({"pinecone": {"type": "api", "key": "pc-1"}, "google": {"type": "api", "key": "g-1"},
+                           "ollama": {"type": "api", "key": "o-1"}, "other": {"type": "api", "key": "x"}}))
+    monkeypatch.setenv("LOGDET_AUTH_FILE", str(f))
+    c = C()
+    assert (c.pinecone_api_key, c.gemini_api_key, c.ollama_api_key) == ("pc-1", "g-1", "o-1")
+    monkeypatch.setenv("GEMINI_API_KEY", "env-wins")
+    assert C().gemini_api_key == "env-wins"

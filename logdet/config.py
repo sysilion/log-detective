@@ -18,6 +18,31 @@ def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+DEFAULT_AUTH_FILE = "~/proj/auth.json"
+
+
+def auth_file_path() -> str:
+    return os.path.expanduser(_env("LOGDET_AUTH_FILE") or DEFAULT_AUTH_FILE)
+
+
+def auth_key(provider: str) -> str:
+    """Read one provider's key from the shared auth file (read-only, never logged).
+
+    Format: {"<provider>": {"type": "api", "key": "..."}, ...}. Only used for local direct-API
+    mode; on a Sprite the connectors inject credentials through the gateway.
+    """
+    import json
+    path = auth_file_path()
+    if not os.path.isfile(path):
+        return ""
+    try:
+        with open(path) as fh:
+            entry = json.load(fh).get(provider) or {}
+        return str(entry.get("key") or "").strip() if isinstance(entry, dict) else ""
+    except (OSError, ValueError):
+        return ""
+
+
 def local_tz_name() -> str:
     tz = _env("LOGDET_TZ") or _env("TZ")
     if tz:
@@ -44,7 +69,7 @@ class Config:
     pinecone_index: str = field(default_factory=lambda: _env("LOGDET_PINECONE_INDEX", "log-detective"))
     pinecone_namespace: str = field(default_factory=lambda: _env("LOGDET_PINECONE_NAMESPACE", "logs"))
     pinecone_gateway: str = field(default_factory=lambda: _env("LOGDET_PINECONE_GATEWAY"))
-    pinecone_api_key: str = field(default_factory=lambda: _env("PINECONE_API_KEY"))
+    pinecone_api_key: str = field(default_factory=lambda: _env("PINECONE_API_KEY") or auth_key("pinecone"))
 
     # embeddings: hash | pinecone | ollama
     embed: str = field(default_factory=lambda: _env("LOGDET_EMBED", "hash"))
@@ -53,12 +78,15 @@ class Config:
         default_factory=lambda: _env("LOGDET_PINECONE_EMBED_MODEL", "multilingual-e5-large"))
     ollama_embed_model: str = field(default_factory=lambda: _env("LOGDET_OLLAMA_EMBED_MODEL", "nomic-embed-text"))
 
-    # LLM: auto | ollama | ollama-cloud | none
+    # LLM: auto | gemini | ollama (Ollama Cloud, then local server) | ollama-local | none
+    gemini_gateway: str = field(default_factory=lambda: _env("LOGDET_GEMINI_GATEWAY"))
+    gemini_api_key: str = field(default_factory=lambda: _env("GEMINI_API_KEY") or auth_key("google"))
+    gemini_model: str = field(default_factory=lambda: _env("LOGDET_GEMINI_MODEL"))
     llm: str = field(default_factory=lambda: _env("LOGDET_LLM", "auto"))
     model: str = field(default_factory=lambda: _env("LOGDET_MODEL"))
     ollama_host: str = field(default_factory=lambda: _env("OLLAMA_HOST", "http://127.0.0.1:11434"))
     ollama_gateway: str = field(default_factory=lambda: _env("LOGDET_OLLAMA_GATEWAY"))
-    ollama_api_key: str = field(default_factory=lambda: _env("OLLAMA_API_KEY"))
+    ollama_api_key: str = field(default_factory=lambda: _env("OLLAMA_API_KEY") or auth_key("ollama"))
 
     # gateway discovery (only meaningful inside a Sprite)
     discover: bool = field(default_factory=lambda: _env("LOGDET_DISCOVER", "auto") != "0")

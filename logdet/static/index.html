@@ -46,7 +46,7 @@ function chart(st){const tl=st.timeline;if(!tl.length)return"";const W=900,H=120
 async function ask(){const q=$("#q").value.trim();if(!q)return;$("#b").disabled=true;$("#out").innerHTML=`<div class="card meta">Investigating… (stats → Pinecone retrieval → Ollama)</div>`;
  try{const r=await fetch("api/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({q})});const d=await r.json();if(d.error)throw new Error(d.error);
   const st=d.stats,w=st.window,b=st.baseline,a=st.anomaly;
-  const tiles=[["p95 latency",ms(w.p95),"baseline "+ms(b.p95)],["peak p95",a?ms(a.peak_p95):"–",a?"at "+new Date(a.peak*1000).toLocaleTimeString().slice(0,5):"no anomaly"],["5xx rate",(w.error_rate*100).toFixed(1)+"%","baseline "+(b.error_rate*100).toFixed(1)+"%"],["requests",w.requests,w.lines+" log lines"]];
+  const tiles=[["p95 latency",ms(w.p95),"baseline "+ms(b.p95)],["peak p95",a?ms(a.peak_p95):"–",a?"at "+new Date(a.peak*1000).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}):"no anomaly"],["5xx rate",(w.error_rate*100).toFixed(1)+"%","baseline "+(b.error_rate*100).toFixed(1)+"%"],["requests",w.requests,w.lines+" log lines"]];
   $("#out").innerHTML=`<div class="tiles">${tiles.map(t=>`<div class="card tile"><div class="k">${t[0]}</div><div class="v">${esc(t[1])}</div><div class="k">${esc(t[2])}</div></div>`).join("")}</div>
   <div class="card"><div class="meta">p95 latency per minute · ${esc(d.range.label)}</div>${chart(st)}</div>
   <div class="card"><div class="answer">${esc(d.answer).replace(/\[(E\d+)\]/g,'<span class="cite">[$1]</span>')}</div>

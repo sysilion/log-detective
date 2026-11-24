@@ -78,6 +78,11 @@ class Detective:
             total_ev += len(events)
             total_ch += len(chunks)
             log(f"  {source}: {len(events)} events -> {len(chunks)} chunks")
+        if self.vs.name == "pinecone" and total_ch:
+            try:
+                log(f"pinecone namespace '{self.cfg.pinecone_namespace}': {self.vs.wait_until(total_ch)} vectors")
+            except Exception as e:  # stats are informational only
+                log(f"pinecone stats unavailable: {str(e)[:120]}")
         return {"events": total_ev, "chunks": total_ch, "vector": self.vs.name, "embed": self.emb.name,
                 "seconds": round(time.time() - t0, 2)}
 
@@ -98,8 +103,11 @@ class Detective:
             hits = local_rerank(self.store.chunks_between(tr.start_ts - 1800, tr.end_ts), query, top_k=8)
         evidence = self._evidence(stats, hits)
 
-        llm = get_llm(self.cfg) if use_llm else None
         answer, llm_name, llm_error = "", None, None
+        try:
+            llm = get_llm(self.cfg) if use_llm else None
+        except Exception as e:  # misconfigured backend: still answer with the rule-based report
+            llm, llm_error = None, str(e)[:300]
         if llm is not None:
             try:
                 answer = llm.chat(SYSTEM_PROMPT, self._prompt(question, tr, stats, evidence))
@@ -108,7 +116,7 @@ class Detective:
                 llm_error = str(e)[:300]
         if not answer:
             answer = heuristic_report(question, stats, evidence, self.cfg.tz)
-            llm_name = llm_name or "heuristic (no LLM)"
+            llm_name = "rule-based (no LLM)"
         return {
             "question": question,
             "range": {"start": tr.start.isoformat(), "end": tr.end.isoformat(), "label": tr.label,
@@ -167,7 +175,8 @@ class Detective:
         tz = self.cfg.tz
         fmt = lambda ts: datetime.fromtimestamp(ts, tz).strftime("%H:%M:%S") if ts else "?"  # noqa: E731
         w, b = stats.window, stats.baseline
-        lines = [f"QUESTION: {question}",
+        lang = "Korean" if re.search(r"[가-힣]", question) else "English"
+        lines = [f"QUESTION: {question}", f"ANSWER LANGUAGE: {lang}",
                  f"TIME WINDOW: {tr.start:%Y-%m-%d %H:%M} -> {tr.end:%Y-%m-%d %H:%M} ({tz.key})",
                  f"WINDOW: requests={w.requests} errors={w.errors} error_rate={w.error_rate:.1%} "
                  f"p50={_ms(w.p50)} p95={_ms(w.p95)} p99={_ms(w.p99)}",
@@ -210,19 +219,19 @@ def local_rerank(chunks, query: str, top_k: int = 8) -> list[dict]:
 
 
 SYSTEM_PROMPT = """You are Log Detective, a senior SRE investigating an incident from log evidence.
-Write the whole answer in the same language as the QUESTION (Korean question -> natural Korean answer).
+Write the whole answer in the language given by ANSWER LANGUAGE (natural, fluent prose).
 Use ONLY the statistics, change events and evidence provided; never invent log lines, numbers or services.
 Cite evidence inline as [E1], [E2]. Every claim about the cause must cite at least one line.
 Reasoning rules:
 - Correlate: the trigger usually starts shortly BEFORE the first anomalous minute, and recovery follows when it ends.
 - Prefer a change event whose timing matches both onset and recovery; explicitly dismiss changes that do not (red herrings).
 - If ANOMALY is "none detected", say so plainly and do not force a root cause.
-Format (markdown, under 220 words):
-**요약/Summary** - one sentence: what happened, when, impact with numbers.
-**타임라인/Timeline** - 3-6 bullets "HH:MM - event [E#]".
-**원인 가설/Root cause** - hypothesis, mechanism, confidence (high/medium/low).
-**다음 조치/Next steps** - 2-3 concrete bullets to confirm or fix.
-Use only the label in the question's language (e.g. "요약" for Korean, "Summary" for English)."""
+Format (markdown, under 220 words), with these four bold headings translated into the answer language:
+**Summary** - one sentence: what happened, when, impact with numbers.
+**Timeline** - 3-6 bullets "HH:MM - event [E#]".
+**Root cause** - hypothesis, mechanism, confidence (high/medium/low).
+**Next steps** - 2-3 concrete bullets to confirm or fix.
+For Korean use the headings 요약 / 타임라인 / 원인 가설 / 다음 조치."""
 
 
 def _ms(v) -> str:

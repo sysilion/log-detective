@@ -8,3 +8,12 @@ dist/
 .pytest_cache/
 .env
 data/sample/
+
+# demo video build
+*.mp4
+*.webm
+demo/out/
+demo/node_modules/
+
+# local secrets (direct-API mode only)
+auth.json

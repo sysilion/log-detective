@@ -106,6 +106,21 @@ class PineconeStore:
         }, self.headers)
         return "created"
 
+    def count(self) -> int:
+        res = request_json("POST", self._host() + "/describe_index_stats", {}, self.headers)
+        return int(((res.get("namespaces") or {}).get(self.ns) or {}).get("vectorCount", 0))
+
+    def wait_until(self, expected: int, timeout: float = 30.0) -> int:
+        """Pinecone serverless is eventually consistent: wait until the namespace shows the upserts."""
+        import time
+        deadline, n = time.time() + timeout, 0
+        while time.time() < deadline:
+            n = self.count()
+            if n >= expected:
+                break
+            time.sleep(1.5)
+        return n
+
     def reset(self) -> None:
         try:
             request_json("POST", self._host() + "/vectors/delete",

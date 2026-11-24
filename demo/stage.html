@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>log-detective demo stage</title>
+<style>
+:root{--bg:#0e0d12;--ink:#f4f2ec;--mute:#a19e95;--acc:#a78bfa;--acc2:#34d399;--bad:#f87171;--line:#2c2a33}
+*{box-sizing:border-box}html,body{margin:0;width:1920px;height:1080px;overflow:hidden;background:var(--bg);color:var(--ink);
+font-family:ui-sans-serif,system-ui,-apple-system,"Helvetica Neue",sans-serif}
+.scene{display:none;position:absolute;inset:0;padding:120px 160px}
+.scene.on{display:flex;flex-direction:column;justify-content:center}
+.kicker{font-size:30px;letter-spacing:.18em;text-transform:uppercase;color:var(--acc);margin-bottom:28px}
+h1{font-size:120px;line-height:1.02;margin:0 0 28px;font-weight:800;letter-spacing:-.02em}
+h2{font-size:76px;line-height:1.1;margin:0 0 30px;font-weight:750;letter-spacing:-.01em}
+p.big{font-size:44px;line-height:1.35;color:var(--mute);margin:0;max-width:1500px}
+.hl{color:var(--ink)}.acc{color:var(--acc)}.bad{color:var(--bad)}.ok{color:var(--acc2)}
+.fade{opacity:0;transform:translateY(18px);animation:in .7s ease forwards}
+.d1{animation-delay:.5s}.d2{animation-delay:1.4s}.d3{animation-delay:2.4s}.d4{animation-delay:3.4s}.d5{animation-delay:4.4s}
+@keyframes in{to{opacity:1;transform:none}}
+.logs{font:26px/1.5 ui-monospace,Menlo,monospace;color:#77746c;margin-top:40px;white-space:pre;overflow:hidden;max-height:330px;
+mask-image:linear-gradient(#000 40%,transparent)}
+.logs b{color:var(--bad);font-weight:500}
+/* terminal */
+.term{background:#16151b;border:1px solid var(--line);border-radius:18px;height:740px;margin-top:-90px;overflow:hidden;box-shadow:0 30px 80px #0008}
+.term .bar{height:52px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 22px;color:var(--mute);font-size:22px}
+.dot{width:16px;height:16px;border-radius:50%;background:#3a3842}
+.term pre{margin:0;padding:26px 32px;font:25px/1.42 ui-monospace,"SF Mono",Menlo,monospace;white-space:pre-wrap;color:#e9e6dd}
+.term .pr{color:var(--acc2)}.term .cmd{color:#fff;font-weight:600}.cur{display:inline-block;width:13px;height:28px;background:#ddd;vertical-align:-5px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+/* architecture */
+.arch{display:grid;grid-template-columns:1.25fr .9fr;gap:60px;align-items:center;margin-top:20px}
+.box{border:2px solid var(--line);border-radius:22px;padding:30px 34px;background:#15141a}
+.box h3{margin:0 0 16px;font-size:34px}.box li{font-size:28px;line-height:1.55;color:var(--mute)}
+.sprite{border-color:var(--acc)}.sprite h3{color:var(--acc)}
+.ext{display:flex;flex-direction:column;gap:34px}.ext .box h3{font-size:32px}.ext .box p{margin:0;font-size:26px;color:var(--mute)}
+.gw{font:22px ui-monospace,Menlo,monospace;color:var(--acc2);margin-top:14px}
+.repo{font:56px ui-monospace,Menlo,monospace;color:var(--ink);margin:10px 0 40px}
+.tags{font-size:40px;color:var(--acc)}
+/* captions + badge */
+#cap{position:fixed;left:50%;bottom:54px;transform:translateX(-50%);max-width:1560px;padding:16px 30px;border-radius:14px;
+background:rgba(0,0,0,.78);color:#fff;font:600 36px/1.35 ui-sans-serif,system-ui,-apple-system,sans-serif;text-align:center;
+z-index:99999;display:none}
+#badge{position:fixed;top:26px;right:30px;font:500 20px ui-sans-serif,system-ui,sans-serif;color:#cfcac0;background:rgba(0,0,0,.55);
+padding:7px 14px;border-radius:999px;z-index:99999;display:none}
+</style>
+</head>
+<body>
+
+<section class="scene" id="hook">
+  <div class="kicker fade">09:04 AM · on-call</div>
+  <h2 class="fade d1">Checkout was <span class="bad">slow at 3 AM.</span><br>Why?</h2>
+  <p class="big fade d2">The answer is somewhere in <span class="hl">30,000 log lines</span> across nginx, the app, and Postgres.</p>
+  <div class="logs fade d3" id="logwall"></div>
+</section>
+
+<section class="scene" id="title">
+  <div class="kicker fade">Fly.io Hacksgiving 2026</div>
+  <h1 class="fade d1">🔎 log-detective</h1>
+  <p class="big fade d2">Ask your logs <span class="hl">why things broke</span>, in plain English or Korean.<br>
+  A personal SRE agent that lives on a <span class="acc">Fly.io Sprite</span>.</p>
+</section>
+
+<section class="scene" id="term">
+  <div class="term"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span>&nbsp; log-detective — zsh</div>
+  <pre id="tout"></pre></div>
+</section>
+
+<section class="scene" id="arch">
+  <div class="kicker fade">Under the hood</div>
+  <div class="arch">
+    <div class="box sprite fade d1"><h3>Fly.io Sprite (isolated microVM)</h3><ul>
+      <li>Parse nginx / JSON / text logs → <span class="hl">SQLite (raw logs stay here)</span></li>
+      <li>Baseline stats: p95, 5xx rate, new error signatures</li>
+      <li>Change events: deploys, jobs, restarts</li>
+      <li>Evidence lines <span class="hl">[E1]…[E14]</span> → cited answer</li>
+      <li>CLI <span class="hl">logdet</span> + web UI on the Sprite URL</li></ul></div>
+    <div class="ext">
+      <div class="box fade d2"><h3>🌲 Pinecone</h3><p>time-filtered vector search over log chunks</p>
+        <div class="gw">Sprites connector · gateway</div></div>
+      <div class="box fade d3"><h3>🦙 Ollama Cloud</h3><p>writes the root-cause hypothesis</p>
+        <div class="gw">Sprites connector · gateway</div></div>
+      <p class="big fade d4" style="font-size:32px">No API keys on the box.</p>
+    </div>
+  </div>
+</section>
+
+<section class="scene" id="outro">
+  <div class="kicker fade">Open source · MIT</div>
+  <h1 class="fade d1">🔎 log-detective</h1>
+  <div class="repo fade d2">github.com/sysilion/log-detective</div>
+  <div class="tags fade d3">#Hacksgiving &nbsp;@flydotio</div>
+</section>
+
+<div id="cap"></div><div id="badge"></div>
+<script src="captions.js"></script>
+<script>
+const LOGWALL = `10.0.58.81 - - [23/Nov/2026:02:59:48 +0900] "GET /api/cart HTTP/1.1" <b>503</b> 1004 rt=3.229
+{"ts":"03:00:01","level":"<b>ERROR</b>","msg":"HikariPool-1 - Connection is not available, request timed out after 3000ms."}
+2026-11-23 03:00:10.491 +09:00 [4105] LOG:  duration: 44451.482 ms  statement: SELECT o.id, o.total, li.sku ...
+10.1.229.151 - - [23/Nov/2026:03:00:01 +0900] "POST /api/checkout HTTP/1.1" <b>503</b> 669 rt=3.103
+{"ts":"03:00:30","level":"WARN","msg":"HikariPool-1 - pool stats (total=50, active=50, idle=0, waiting=37)"}
+10.0.236.118 - - [23/Nov/2026:03:00:12 +0900] "POST /api/login HTTP/1.1" <b>504</b> 3960 rt=3.157
+10.2.14.77 - - [23/Nov/2026:03:00:13 +0900] "GET /api/products/4471 HTTP/1.1" 200 2210 rt=0.081
+{"ts":"03:00:41","level":"WARN","msg":"HikariPool-1 - Thread starvation or clock leap detected"}`;
+document.getElementById("logwall").innerHTML = LOGWALL;
+
+function show(id){document.querySelectorAll(".scene").forEach(s=>s.classList.toggle("on",s.id===id));}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+// terminal: steps = [{cmd, out:[lines], pause}]
+async function playTerm(steps){
+  const el=document.getElementById("tout"); const prompt='<span class="pr">~/log-detective $</span> ';
+  let html="";
+  const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  for(const st of steps){
+    let typed="";
+    for(const ch of st.cmd){typed+=ch;el.innerHTML=html+prompt+'<span class="cmd">'+esc(typed)+'</span><span class="cur"></span>';await sleep(38);}
+    html+=prompt+'<span class="cmd">'+esc(st.cmd)+'</span>\n'; el.innerHTML=html+'<span class="cur"></span>'; await sleep(450);
+    for(const line of st.out){html+=esc(line)+"\n";el.innerHTML=html+'<span class="cur"></span>';await sleep(st.lineDelay??60);}
+    await sleep(st.pause??600);
+  }
+  el.innerHTML=html+prompt+'<span class="cur"></span>';
+}
+const id=location.hash.slice(1)||"title"; show(id);
+</script>
+</body>
+</html>

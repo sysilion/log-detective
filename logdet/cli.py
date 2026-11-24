@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timedelta
 
@@ -76,25 +77,33 @@ def cmd_serve(args, cfg):
 
 
 def cmd_doctor(args, cfg):
-    from .net import discover_gateways, ollama_gateway, pinecone_gateway
+    from .config import auth_file_path
+    from .net import discover_gateways, gemini_gateway, ollama_gateway, pinecone_gateway
     print(f"in_sprite        : {in_sprite()}")
     print(f"home / tz        : {cfg.home} / {cfg.tz.key}")
     gws = discover_gateways(cfg)
     print(f"gateway discovery: {gws or '(none)'}")
     print(f"pinecone         : gateway={pinecone_gateway(cfg) or '-'} api_key={'set' if cfg.pinecone_api_key else '-'}"
           f" index={cfg.pinecone_index} ns={cfg.pinecone_namespace}")
+    print(f"auth file        : {auth_file_path()} ({'found' if os.path.isfile(auth_file_path()) else 'missing'})")
+    print(f"gemini           : gateway={gemini_gateway(cfg) or '-'} api_key={'set' if cfg.gemini_api_key else '-'}")
     print(f"ollama           : gateway={ollama_gateway(cfg) or '-'} api_key={'set' if cfg.ollama_api_key else '-'}"
           f" local={cfg.ollama_host}")
     from .agent import Detective
     d = Detective(cfg)
     for label, fn in (("vector store", lambda: d.vs.name + (f" via {d.vs.via}" if hasattr(d.vs, 'via') else "")),
                       ("embedder", lambda: f"{d.emb.name} dim={len(d.emb.embed(['probe'])[0])}"),
-                      ("llm", lambda: (lambda l: l.name if l else 'none (heuristic reports)')(
+                      ("llm", lambda: (lambda l: l.name if l else 'none (rule-based reports)')(
                           __import__('logdet.llm', fromlist=['get_llm']).get_llm(cfg)))):
         try:
             print(f"{label:<17}: {fn()}")
         except Exception as e:
             print(f"{label:<17}: ERROR {e}")
+    if getattr(d.vs, "name", "") == "pinecone":
+        try:
+            print(f"pinecone vectors : {d.vs.count()} in namespace '{cfg.pinecone_namespace}'")
+        except Exception as e:
+            print(f"pinecone vectors : ERROR {str(e)[:160]}")
     ev, ch = d.store.counts()
     print(f"local store      : {ev} events, {ch} chunks")
 

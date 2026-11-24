@@ -36,7 +36,7 @@ def test_finds_incident_and_root_cause(det):
     lines = " ".join(e["line"] for e in res["evidence"])
     assert "nightly_sales_report started" in lines
     assert "nightly_sales_report" in res["answer"] and "가설" in res["answer"]
-    assert res["llm"].startswith("heuristic")
+    assert res["llm"].startswith("rule-based")
 
 
 def test_english_question_and_quiet_window(det):

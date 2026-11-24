@@ -1,0 +1,8 @@
+{
+  "name": "log-detective-demo",
+  "private": true,
+  "type": "module",
+  "description": "Builds demo/out/intro.mp4 (Playwright screen capture + macOS say narration + ffmpeg)",
+  "scripts": { "build": "node build.mjs" },
+  "devDependencies": { "playwright": "1.61.1" }
+}
