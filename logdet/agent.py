@@ -89,6 +89,9 @@ class Detective:
     # ------------------------------------------------------------ ask
     def ask(self, question: str, now: datetime | None = None, use_llm: bool = True) -> dict:
         t0 = time.time()
+        if now is None and self.cfg.now_override:
+            now = datetime.fromisoformat(self.cfg.now_override)
+            now = now if now.tzinfo else now.replace(tzinfo=self.cfg.tz)
         now = now or datetime.now(self.cfg.tz)
         tr = parse_time_range(question, now, self.cfg.tz, self.store.time_range())
         stats = analyze(self.store, tr.start_ts, tr.end_ts)

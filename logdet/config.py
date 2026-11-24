@@ -88,6 +88,9 @@ class Config:
     ollama_gateway: str = field(default_factory=lambda: _env("LOGDET_OLLAMA_GATEWAY"))
     ollama_api_key: str = field(default_factory=lambda: _env("OLLAMA_API_KEY") or auth_key("ollama"))
 
+    # pinned "current time" for demos (ISO 8601), so "yesterday 3am" keeps pointing at the sample incident
+    now_override: str = field(default_factory=lambda: _env("LOGDET_NOW"))
+
     # gateway discovery (only meaningful inside a Sprite)
     discover: bool = field(default_factory=lambda: _env("LOGDET_DISCOVER", "auto") != "0")
 

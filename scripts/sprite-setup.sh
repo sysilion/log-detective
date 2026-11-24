@@ -3,13 +3,15 @@
 set -eu
 APP="$HOME/log-detective"
 TZNAME="${LOGDET_TZ:-Asia/Seoul}"
-ENVV="LOGDET_HOME=$HOME/.logdet,LOGDET_TZ=$TZNAME"
+# pin the demo clock to "today 09:00" at deploy time, so "yesterday 3am" keeps meaning the sample incident day
+DEMO_NOW="${LOGDET_NOW:-$(TZ=$TZNAME date +%Y-%m-%dT09:00)}"
+ENVV="LOGDET_HOME=$HOME/.logdet,LOGDET_TZ=$TZNAME,LOGDET_NOW=$DEMO_NOW"
 [ -n "${LOGDET_MODEL:-}" ] && ENVV="$ENVV,LOGDET_MODEL=$LOGDET_MODEL"
 
 mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/logdet" <<WRAP
 #!/usr/bin/env sh
-export LOGDET_HOME="\${LOGDET_HOME:-$HOME/.logdet}" LOGDET_TZ="\${LOGDET_TZ:-$TZNAME}"
+export LOGDET_HOME="\${LOGDET_HOME:-$HOME/.logdet}" LOGDET_TZ="\${LOGDET_TZ:-$TZNAME}" LOGDET_NOW="\${LOGDET_NOW-$DEMO_NOW}"
 ${LOGDET_MODEL:+export LOGDET_MODEL="\${LOGDET_MODEL:-$LOGDET_MODEL}"}
 exec env PYTHONPATH="$APP" python3 -m logdet.cli "\$@"
 WRAP

@@ -62,3 +62,12 @@ def test_ask_guard_limits():
     assert "budget" in g.admit("c")
     g.store("q", {"answer": "x"})
     assert g.cached("q") == {"answer": "x"} and g.cached("other") is None
+
+
+def test_pinned_demo_clock(det):
+    det.cfg.now_override = "2026-11-24T09:00"
+    try:
+        res = det.ask("Why did checkout slow down at 3am yesterday?")
+        assert res["range"]["label"] == "2026-11-23 03:00" and res["stats"]["anomaly"]
+    finally:
+        det.cfg.now_override = ""

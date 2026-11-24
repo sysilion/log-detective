@@ -36,7 +36,7 @@ const EX=["어제 새벽 3시에 왜 느려졌어?","Why did checkout slow down 
 const $=s=>document.querySelector(s),esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const ms=v=>v==null?"–":v>=1000?(v/1000).toFixed(1)+"s":Math.round(v)+"ms";
 EX.forEach(e=>{const c=document.createElement("button");c.type="button";c.className="chip";c.textContent=e;c.onclick=()=>{$("#q").value=e;ask()};$("#chips").append(c)});
-fetch("api/health").then(r=>r.json()).then(h=>{$("#health").textContent=`${h.events} events · ${h.chunks} chunks indexed · tz ${h.tz}`+(h.range?` · ${h.range[0].slice(0,16)} → ${h.range[1].slice(0,16)}`:"")}).catch(()=>{});
+fetch("api/health").then(r=>r.json()).then(h=>{$("#health").textContent=`${h.events} events · ${h.chunks} chunks indexed · tz ${h.tz}`+(h.range?` · ${h.range[0].slice(0,16)} → ${h.range[1].slice(0,16)}`:"")+(h.now?` · demo clock pinned to ${h.now.slice(0,16)} (so "yesterday" = the sample incident day)`:"")}).catch(()=>{});
 $("#f").onsubmit=e=>{e.preventDefault();ask()};
 function chart(st){const tl=st.timeline;if(!tl.length)return"";const W=900,H=120,mx=Math.max(...tl.map(m=>m.p95||0))||1,bw=W/tl.length,a=st.anomaly;
  let s=`<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="p95 latency per minute">`;

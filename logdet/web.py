@@ -79,7 +79,7 @@ def serve(cfg: Config, host: str = "0.0.0.0", port: int = 8080) -> None:
             elif self.path == "/api/health":
                 ev, ch = det.store.counts()
                 rng = det.store.time_range()
-                self._json(200, {"ok": True, "events": ev, "chunks": ch, "tz": cfg.tz.key,
+                self._json(200, {"ok": True, "events": ev, "chunks": ch, "tz": cfg.tz.key, "now": cfg.now_override or None,
                                  "range": [datetime.fromtimestamp(t, cfg.tz).isoformat() for t in rng] if rng else None})
             else:
                 self._send(404, b"not found", "text/plain")

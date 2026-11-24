@@ -56,7 +56,8 @@ def _spark(vals: list[float], width: int = 60) -> str:
 
 def cmd_sample(args, cfg):
     from .sample import generate
-    date = datetime.fromisoformat(args.date) if args.date else datetime.now(cfg.tz) - timedelta(days=1)
+    base = _now(cfg, cfg.now_override) or datetime.now(cfg.tz)
+    date = datetime.fromisoformat(args.date) if args.date else base - timedelta(days=1)
     files = generate(args.out, date, cfg.tz, seed=args.seed)
     print(f"sample incident dataset for {date:%Y-%m-%d} ({cfg.tz.key}):")
     for f in files:
