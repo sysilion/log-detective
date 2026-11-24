@@ -6,10 +6,8 @@ import math
 from pathlib import Path
 
 from .config import Config
-from .net import HTTPError, pinecone_gateway, request_json
+from .net import PINECONE_API, PINECONE_VERSION, HTTPError, pinecone_gateway, request_json
 
-PINECONE_API = "https://api.pinecone.io"
-PINECONE_VERSION = "2025-04"
 
 
 def time_overlap_filter(start: float | None, end: float | None) -> dict | None:

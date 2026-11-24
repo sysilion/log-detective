@@ -89,10 +89,16 @@ def cmd_doctor(args, cfg):
           f" local={cfg.ollama_host}")
     from .agent import Detective
     d = Detective(cfg)
-    for label, fn in (("vector store", lambda: d.vs.name + (f" via {d.vs.via}" if hasattr(d.vs, 'via') else "")),
-                      ("embedder", lambda: f"{d.emb.name} dim={len(d.emb.embed(['probe'])[0])}"),
-                      ("llm", lambda: (lambda l: l.name if l else 'none (rule-based reports)')(
-                          __import__('logdet.llm', fromlist=['get_llm']).get_llm(cfg)))):
+    from .llm import get_llm
+
+    def llm_name() -> str:
+        llm = get_llm(cfg)
+        return llm.name if llm else "none (rule-based reports)"
+
+    probes = (("vector store", lambda: d.vs.name + (f" via {d.vs.via}" if hasattr(d.vs, "via") else "")),
+              ("embedder", lambda: f"{d.emb.name} dim={len(d.emb.embed(['probe'])[0])}"),
+              ("llm", llm_name))
+    for label, fn in probes:
         try:
             print(f"{label:<17}: {fn()}")
         except Exception as e:

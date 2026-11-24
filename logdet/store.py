@@ -86,20 +86,11 @@ class Store:
         return (self.db.execute("SELECT COUNT(*) FROM events").fetchone()[0],
                 self.db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0])
 
-    def chunks_by_ids(self, ids: list[str]) -> dict[str, Chunk]:
-        if not ids:
-            return {}
-        q = ",".join("?" * len(ids))
-        rows = self.db.execute(f"SELECT * FROM chunks WHERE id IN ({q})", ids).fetchall()
-        return {r["id"]: Chunk(**dict(r)) for r in rows}
-
     def chunks_between(self, start: float, end: float) -> list[Chunk]:
         rows = self.db.execute("SELECT * FROM chunks WHERE ts_start < ? AND ts_end > ? ORDER BY ts_start",
                                (end, start)).fetchall()
         return [Chunk(**dict(r)) for r in rows]
 
-    def all_chunks(self) -> list[Chunk]:
-        return [Chunk(**dict(r)) for r in self.db.execute("SELECT * FROM chunks ORDER BY ts_start")]
 
 
 def _interesting(e: Event) -> int:

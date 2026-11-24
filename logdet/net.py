@@ -9,6 +9,10 @@ from typing import Any
 from .config import SPRITES_GATEWAY_LIST, Config, in_sprite
 
 
+PINECONE_API = "https://api.pinecone.io"      # Pinecone control plane + inference (direct-key mode)
+PINECONE_VERSION = "2025-04"                   # sent as X-Pinecone-API-Version
+
+
 class HTTPError(RuntimeError):
     def __init__(self, status: int, url: str, body: str):
         super().__init__(f"HTTP {status} from {url}: {body[:300]}")

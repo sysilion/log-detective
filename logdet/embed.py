@@ -6,10 +6,8 @@ import math
 import re
 
 from .config import Config
-from .net import pinecone_gateway, request_json
+from .net import PINECONE_API, PINECONE_VERSION, pinecone_gateway, request_json
 
-PINECONE_API = "https://api.pinecone.io"
-PINECONE_VERSION = "2025-04"
 
 _TOKEN_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]{1,40}|[가-힣]{1,10}|\d{3}")
 
