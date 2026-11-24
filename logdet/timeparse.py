@@ -33,7 +33,9 @@ _DAY_WORDS = [
 _DATE_RE = re.compile(r"(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})월\s*(\d{1,2})일|\b(\d{1,2})/(\d{1,2})\b")
 _REL_RE = re.compile(
     r"(?:지난|최근|last|past)\s*(\d+)\s*(분|시간|일|min(?:ute)?s?|h(?:ou)?rs?|hours?|days?)", re.I)
-_KO_TIME_RE = re.compile(r"(새벽|오전|오후|아침|저녁|밤|낮)?\s*(\d{1,2})\s*시\s*(?:(\d{1,2})\s*분|(반))?")
+_KO_TIME_RE = re.compile(r"(새벽|오전|오후|아침|저녁|밤|낮)?\s*(\d{1,2})\s*시(?!간)\s*(?:(\d{1,2})\s*분|(반))?")
+# "30분 전", "2시간 전", "45 minutes ago", "2 hours ago" -> a point in time relative to now
+_AGO_RE = re.compile(r"(\d+)\s*(분|시간|min(?:ute)?s?|h(?:ou)?rs?|hours?)\s*(?:전|ago)", re.I)
 _EN_TIME_RE = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)", re.I)
 _CLOCK_RE = re.compile(r"(?<![\d/:-])(\d{1,2}):(\d{2})(?![\d:])")
 
@@ -74,6 +76,12 @@ def parse_time_range(question: str, now: datetime, tz: tzinfo,
         delta = (timedelta(minutes=n) if unit.startswith(("분", "min")) else
                  timedelta(days=n) if unit.startswith(("일", "day")) else timedelta(hours=n))
         return TimeRange(now - delta, now, f"last {m.group(1)}{m.group(2)}")
+
+    m = _AGO_RE.search(q)
+    if m:
+        n, unit = int(m.group(1)), m.group(2).lower()
+        point = now - (timedelta(minutes=n) if unit.startswith(("분", "min")) else timedelta(hours=n))
+        return TimeRange(point - POINT_BEFORE, min(point + POINT_AFTER, now), f"{m.group(0)} ({point:%H:%M})")
 
     day: datetime | None = None
     dm = _DATE_RE.search(q)
