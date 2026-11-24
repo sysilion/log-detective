@@ -15,7 +15,11 @@ const VOICE = process.env.VOICE || "Samantha";
 const RATE = process.env.RATE || "180";
 const PORT = Number(process.env.PORT || 8799);
 const W = 1920, H = 1080, FPS = 30;
-const BADGE = process.env.BADGE || "v1 · recorded locally · real Pinecone + Gemini (direct keys) · Sprite connectors next";
+// SPRITE=<name> UI_URL=<sprite url>: record the live Sprite (connectors) instead of a local run
+const SPRITE = process.env.SPRITE || "";
+const UI_URL = (process.env.UI_URL || "").replace(/\/$/, "");
+const BADGE = process.env.BADGE || (UI_URL ? `live on a Fly.io Sprite · ${UI_URL.replace("https://", "")}`
+  : "recorded locally · real Pinecone + Gemini (direct keys)");
 const ENV = { ...process.env, LOGDET_HOME: path.join(OUT, "home"), LOGDET_TZ: "Asia/Seoul",
   // real Pinecone (direct API key from ../auth.json, never printed); falls back to local if no key
   LOGDET_VECTOR: process.env.LOGDET_VECTOR || "auto", LOGDET_PINECONE_NAMESPACE: "demo-video",
@@ -31,7 +35,10 @@ const SCENES = [
     ["Meet log-detective: a personal SRE agent that lives on a Fly.io Sprite.",
      "Meet log detective: a personal S R E agent that lives on a Fly dot I O Sprite."],
     "You just ask your logs what happened."] },
-  { id: "term", type: "term", badge: true, lines: [
+  { id: "term", type: "term", badge: true, lines: SPRITE ? [
+    "This is the agent, running on a Fly.io Sprite.",
+    "Pinecone and Gemini are reached through Sprites connectors, so no API keys live on the box.",
+    "Ask in plain English, and it answers in a few seconds."] : [
     "From the command line, ingest your logs.",
     "They're parsed, chunked into two-minute windows, and embedded into Pinecone.",
     "Then ask, in plain English."] },
@@ -92,6 +99,16 @@ function narrate(scene) {
 }
 
 function captureTerminal() {
+  if (SPRITE) {  // real output from the Sprite; mask connection ids
+    const mask = (t) => t.replace(/(\/v1\/gateway\/[a-z_]+\/)[A-Za-z0-9_-]+/g, "$1conn_…").trim().split("\n");
+    const run = (args) => mask(sh("sprite", ["exec", "-s", SPRITE, "--no-stdin", "--", "/home/sprite/.local/bin/logdet", ...args]));
+    const doctor = run(["doctor"]).filter((l) => !/^(home|auth file|local store)/.test(l));
+    const ask = run(["ask", "Why did checkout slow down at 3am yesterday?"]);
+    return [
+      { cmd: "logdet doctor", out: doctor, lineDelay: 55, pause: 600 },
+      { cmd: 'logdet ask "Why did checkout slow down at 3am yesterday?"', out: ask, lineDelay: 22, pause: 300 },
+    ];
+  }
   const run = (args) => sh("python3", ["-m", "logdet.cli", ...args], { cwd: OUT, env: ENV });
   const demo = run(["demo", "--out", "data/sample"]).trim().split("\n");
   const ask = run(["ask", "Why did checkout slow down at 3am yesterday?"]).trim().split("\n");
@@ -117,7 +134,7 @@ async function record(browser, scene, narr, termSteps) {
   const page = await ctx.newPage();
   const t0 = Date.now();
   if (scene.type === "ui") {
-    await page.goto(`http://127.0.0.1:${PORT}/`);
+    await page.goto(UI_URL ? UI_URL + "/" : `http://127.0.0.1:${PORT}/`);
     await page.addStyleTag({ content: "main{zoom:1.5}" });
     await page.waitForSelector("#health:not(:empty)");
   } else {
@@ -125,6 +142,10 @@ async function record(browser, scene, narr, termSteps) {
   }
   await sleep(300);
   const tReady = Date.now();
+  if (scene.type === "term" && SPRITE) await page.evaluate(() => {
+    document.querySelector(".term .bar").lastChild.textContent = " sprite console — log-detective";
+    window.__prompt = "sprite@log-detective:~$";
+  });
   await page.evaluate(([cues, end, badge]) => { window.__captions(cues, end); window.__badge(badge); },
     [narr.cues, narr.audio, scene.badge ? BADGE : ""]);
 
@@ -136,7 +157,7 @@ async function record(browser, scene, narr, termSteps) {
     await page.keyboard.type(scene.q, { delay: 40 });
     await sleep(350);
     await page.click("#b");
-    await page.waitForSelector(".answer");
+    await page.waitForSelector(".answer", { timeout: 90000 });
     const toEvidence = scene.id === "ui1" ? 9000 : 1800;
     await sleep(scene.id === "ui1" ? 2600 : 600);
     await page.evaluate(() => window.scrollTo({ top: document.querySelector(".answer").getBoundingClientRect().top

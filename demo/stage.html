@@ -108,7 +108,7 @@ function show(id){document.querySelectorAll(".scene").forEach(s=>s.classList.tog
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 // terminal: steps = [{cmd, out:[lines], pause}]
 async function playTerm(steps){
-  const el=document.getElementById("tout"); const prompt='<span class="pr">~/log-detective $</span> ';
+  const el=document.getElementById("tout"); const prompt='<span class="pr">'+(window.__prompt||"~/log-detective $")+'</span> ';
   let html="";
   const esc=s=>s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
   for(const st of steps){
